@@ -1,0 +1,3 @@
+from market_intel.infrastructure.fundamentals.sec_company_facts_adapter import SecCompanyFactsFundamentalsAdapter
+
+__all__ = ["SecCompanyFactsFundamentalsAdapter"]

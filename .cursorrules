@@ -1,0 +1,45 @@
+# learn_shares / market-intel — Cursor agent rules 
+
+## Project context
+
+- **Product**: Interactive stock-market education and analytics (learningShares; formerly Market-Intel). Goal: teach capital markets in a simple, staged, interactive way.
+- **Stack**: Python **3.11+**, **FastAPI** (API), **Streamlit** (UI), **Pydantic v2**, **Plotly**, **pandas** / **numpy**, optional **Redis**, **WebSockets** where used. Package layout lives under `src/` (setuptools `packages.find`).
+- **Do not invent** frameworks or patterns that contradict this stack unless the user explicitly asks to migrate.
+
+## How to work (process)
+
+- **Read before editing**: Open and understand related modules, callers, and config before large or behavioral changes. Do not guess external APIs or internal contracts.
+- **Minimal, purposeful diffs**: Solve the stated task only. Avoid drive-by refactors, unrelated formatting sweeps, or “cleanup” outside scope.
+- **Match the codebase**: Follow existing naming, typing style, imports, error handling, and documentation density. Extend existing helpers instead of duplicating logic.
+- **Run checks when relevant**: Prefer `ruff check`, `pytest`, or targeted runs after non-trivial changes when available; if something cannot be run here, say so briefly.
+- **User-facing language**: The user may write in Hebrew; implement code and identifiers in English unless the project already uses localized strings. Explain in the language the user uses in chat when appropriate.
+- **Hebrew replies (quality and mixing)**:
+  - When the user writes in **Hebrew**, answer in **clear, fluent Hebrew**: full sentences, logical flow, and readable structure (short paragraphs, lists where helpful).
+  - **Do not** mix Hebrew and English inside the same sentence in a sloppy way. Prefer either (a) a Hebrew sentence with technical tokens isolated in backticks or parentheses, or (b) a short English line only for a file path, command, or identifier — not half-Hebrew half-English phrasing.
+  - Technical terms that are universally used in English (e.g. API, commit, PR) may stay in English; surround them with Hebrew grammar naturally or set them off with punctuation/backticks so the sentence stays coherent.
+  - Code, paths, and symbol names stay **English** as in the codebase; the **explanation** around them should be consistently in the user’s chat language.
+
+## Code quality and architecture
+
+- Prefer **clear boundaries** between API layers, domain logic, and UI (Streamlit) when the project already separates them.
+- Use **type hints** and **Pydantic models** consistently with existing code.
+- For async code, keep **async/await** consistent with surrounding modules.
+- **Comments**: Only when they remove real ambiguity; avoid noisy or redundant commentary.
+
+## Security and configuration
+
+- **Secrets**: Never commit or paste real API keys, tokens, or passwords. Use `.env` / settings patterns already in the repo; reference env var **names**, not values.
+- Treat user financial or personal data with care; do not log sensitive payloads.
+
+## Files and documentation
+
+- **Do not** create new Markdown/README/docs files unless the user explicitly asks.
+- **Do not** delete unrelated comments or code outside the task.
+
+## Testing
+
+- For bug fixes and non-trivial logic, add or update **tests** under `tests/` when the project already tests similar code. Use `pytest` / `pytest-asyncio` conventions from `pyproject.toml`.
+
+## When uncertain
+
+- State assumptions briefly, or ask a **single** focused question instead of blocking on hypotheticals.

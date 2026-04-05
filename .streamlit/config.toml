@@ -1,0 +1,8 @@
+# Desktop / PyInstaller: Streamlit otherwise prints localhost:3000 while the app serves on server.port.
+[global]
+developmentMode = false
+
+[server]
+headless = true
+enableXsrfProtection = false
+enableCORS = false

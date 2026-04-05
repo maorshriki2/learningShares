@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@400;600&display=swap');
+
+html, body, [class*="css"]  {
+  font-family: 'Inter', sans-serif;
+}
+
+.terminal-root {
+  background: radial-gradient(1200px 600px at 10% -10%, #14324a 0%, #0b1220 55%, #070b12 100%);
+  color: #e6f1ff;
+}
+
+.terminal-panel {
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(7, 11, 18, 0.92));
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.15), 0 20px 50px rgba(0, 0, 0, 0.45);
+}
+
+.terminal-title {
+  font-family: 'IBM Plex Mono', monospace;
+  letter-spacing: 0.04em;
+  color: #7dd3fc;
+}
+
+.metric-glow {
+  color: #5eead4;
+}
+
+.stTabs [data-baseweb="tab-list"] {
+  gap: 8px;
+}
+
+.stTabs [data-baseweb="tab"] {
+  background-color: rgba(15, 23, 42, 0.6);
+  border-radius: 8px 8px 0 0;
+}
+
+div[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, #0f172a, #0b1020);
+}
