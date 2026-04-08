@@ -25,31 +25,38 @@ if (-not $remote) {
 
 Write-Host "Branch: $branch" -ForegroundColor Cyan
 
-# Do not use 2>&1 here: Git prints progress to stderr; PowerShell treats that as errors.
-git pull --rebase --autostash origin $branch
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "git pull --rebase failed. Resolve conflicts or sync with loadGit.ps1, then try again."
-}
+# Git writes progress to stderr; PS 5.1 surfaces that as errors unless we relax EAP for native git.
+$eap = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try {
+    & git pull --rebase --autostash origin $branch
+    if ($LASTEXITCODE -ne 0) {
+        throw "git pull --rebase failed. Resolve conflicts or sync with loadGit.ps1, then try again."
+    }
 
-git add -A
-$dirty = git status --porcelain
-if (-not $dirty) {
-    Write-Host "Nothing to commit; skipping push." -ForegroundColor Yellow
-    exit 0
-}
+    & git add -A
+    $dirty = git status --porcelain
+    if (-not $dirty) {
+        Write-Host "Nothing to commit; skipping push." -ForegroundColor Yellow
+        exit 0
+    }
 
-if (-not $Message) {
-    $Message = "Update $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
-}
+    if (-not $Message) {
+        $Message = "Update $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
+    }
 
-git commit -m $Message
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "git commit failed."
-}
+    & git commit -m $Message
+    if ($LASTEXITCODE -ne 0) {
+        throw "git commit failed."
+    }
 
-git push -u origin $branch
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "git push failed. Check auth (HTTPS/SSH) and that the GitHub repo exists."
+    & git push -u origin $branch
+    if ($LASTEXITCODE -ne 0) {
+        throw "git push failed. Check auth (HTTPS/SSH) and that the GitHub repo exists."
+    }
+}
+finally {
+    $ErrorActionPreference = $eap
 }
 
 Write-Host "Pushed to origin/$branch successfully." -ForegroundColor Green
