@@ -6,6 +6,9 @@ from typing import Any
 
 import streamlit as st
 
+from market_intel.ui.components.explanation_blocks import render_focus_block, render_focus_heading
+from market_intel.ui.formatters.bidi_text import num_embed as N
+
 _TF_CONTEXT: dict[str, str] = {
     "1mo": "כל נר = חודש מסחר אחד. הנר הימני ביותר הוא החודש האחרון בחלון.",
     "1wk": "כל נר = שבוע מסחר אחד (אצל ספק הנתונים לרוב שבוע קלנדרי). הנר הימני ביותר הוא השבוע האחרון בחלון.",
@@ -96,15 +99,15 @@ def _fib_bracket(close: float, fib: dict[str, Any] | None) -> str | None:
     lo_p = priced[0][1]
     hi_p = priced[-1][1]
     if close < lo_p:
-        return f"הסגירה האחרונה ({close:.2f}) נמוכה מכל רמות פיבונאצ'י המחושבות מהנדנדה בחלון — מתחת לטווח הרטרייסמנט."
+        return f"הסגירה האחרונה ({N(f'{close:.2f}')}) נמוכה מכל רמות פיבונאצ'י המחושבות מהנדנדה בחלון — מתחת לטווח הרטרייסמנט."
     if close > hi_p:
-        return f"הסגירה האחרונה ({close:.2f}) גבוהה מכל רמות פיבונאצ'י בחלון — מעל טווח הרטרייסמנט."
+        return f"הסגירה האחרונה ({N(f'{close:.2f}')}) גבוהה מכל רמות פיבונאצ'י בחלון — מעל טווח הרטרייסמנט."
     for j in range(len(priced) - 1):
         a, pa = priced[j]
         b, pb = priced[j + 1]
         if pa <= close <= pb:
             return (
-                f"מחיר הסגירה האחרון ({close:.2f}) נמצא **בין** רמת פיב `{a}` ({pa:.2f}) ל־`{b}` ({pb:.2f}) "
+                f"מחיר הסגירה האחרון ({N(f'{close:.2f}')}) נמצא **בין** רמת פיב `{a}` ({N(f'{pa:.2f}')}) ל־`{b}` ({N(f'{pb:.2f}')}) "
                 f"— כלומר ביחס לנדנדה שזוהתה בחלון, המחיר \"יושב\" בתוך מסלול התיקון הסטנדרטי."
             )
     return None
@@ -155,13 +158,13 @@ def build_ohlcv_regime_lines(
     ret_lb = ((close / close_start) - 1.0) * 100.0 if close_start and close_start > 0 else None
 
     out.append(
-        f"ב־**{lb}** הנרות האחרונים: השפל בחלון **{lo_w:.2f}**, השיא **{hi_w:.2f}**. "
-        f"הסגירה האחרונה (**{close:.2f}**) יושבת בערך ב־**{pct * 100:.0f}%** של המרחק בין השפל לשיא — "
+        f"ב־**{N(lb)}** הנרות האחרונים: השפל בחלון **{N(f'{lo_w:.2f}')}**, השיא **{N(f'{hi_w:.2f}')}**. "
+        f"הסגירה האחרונה (**{N(f'{close:.2f}')}**) יושבת בערך ב־**{N(f'{pct * 100:.0f}')}**% של המרחק בין השפל לשיא — "
         "זה אומר **כמה גבוה או נמוך המחיר ביחס לטווח הזה**, לא מה יקרה לעסק בעוד חמש שנים."
     )
     if ret_lb is not None:
         out.append(
-            f"תשואה **משוערת** על אותם {lb} נרות, מסגירה לסגירה מתחילת החלון ועד היום: **{ret_lb:+.1f}%**."
+            f"תשואה **משוערת** על אותם {N(lb)} נרות, מסגירה לסגירה מתחילת החלון ועד היום: **{N(f'{ret_lb:+.1f}%')}**."
         )
 
     rsi_t = _last_numeric(ind.get("rsi14"))
@@ -306,13 +309,15 @@ def build_ohlcv_snapshot_lines(
     lines: list[str] = []
     sym_bold = f"**{symbol}**"
     tf_note = _TF_CONTEXT.get(timeframe, f"מסגרת `{timeframe}` — כל נר הוא יחידת זמן אחת בחלון.")
-    lines.append(f"{sym_bold} · {tf_note} סה״כ **{n}** נרות בגרף.")
+    lines.append(f"{sym_bold} · {tf_note} סה״כ **{N(n)}** נרות בגרף.")
 
     bull = c >= o
     direction = "נר **ירוק** (סגירה מעל פתיחה)" if bull else "נר **אדום** (סגירה מתחת לפתיחה)"
     move = abs(c - o)
     rng = h - l_
-    lines.append(f"הנר הימני ביותר: {direction}, סגירה **{c:.2f}**, טווח יום/נר **{rng:.2f}** (גבוה–נמוך).")
+    lines.append(
+        f"הנר הימני ביותר: {direction}, סגירה **{N(f'{c:.2f}')}**, טווח יום/נר **{N(f'{rng:.2f}')}** (גבוה–נמוך)."
+    )
 
     if rng > 1e-9:
         body_ratio = move / rng
@@ -332,19 +337,19 @@ def build_ohlcv_snapshot_lines(
         rsi_i, rsi_v = rsi_t
         if rsi_i < n - 1:
             lines.append(
-                f"**RSI**: המספר הבא מגיע מנר **{rsi_i + 1}** מתוך {n} — בנר הימני ביותר אין עדיין RSI חשוב."
+                f"**RSI**: המספר הבא מגיע מנר **{N(rsi_i + 1)}** מתוך **{N(n)}** — בנר הימני ביותר אין עדיין RSI חשוב."
             )
         if rsi_v >= 70:
             lines.append(
-                f"**RSI(14)** בסוף החלון: **{rsi_v:.1f}** — מעל קו 70, אזור שמפרשים כלחץ קנייה חזק (לא אומר שחייב לרדת מיד)."
+                f"**RSI(14)** בסוף החלון: **{N(f'{rsi_v:.1f}')}** — מעל קו **{N(70)}**, אזור שמפרשים כלחץ קנייה חזק (לא אומר שחייב לרדת מיד)."
             )
         elif rsi_v <= 30:
             lines.append(
-                f"**RSI(14)** בסוף החלון: **{rsi_v:.1f}** — מתחת ל־30, אזור שמפרשים כלחץ מכירה חזק (לא אומר שחייב לעלות מיד)."
+                f"**RSI(14)** בסוף החלון: **{N(f'{rsi_v:.1f}')}** — מתחת ל־**{N(30)}**, אזור שמפרשים כלחץ מכירה חזק (לא אומר שחייב לעלות מיד)."
             )
         else:
             lines.append(
-                f"**RSI(14)** בסוף החלון: **{rsi_v:.1f}** — בין 30 ל־70, כלומר לפי הכלל הפשוט אין \"קיצון\" מומנטום ביחס לקווים על הגרף."
+                f"**RSI(14)** בסוף החלון: **{N(f'{rsi_v:.1f}')}** — בין **{N(30)}** ל־**{N(70)}**, כלומר לפי הכלל הפשוט אין \"קיצון\" מומנטום ביחס לקווים על הגרף."
             )
 
     macd_line = ind.get("macd")
@@ -355,13 +360,13 @@ def build_ohlcv_snapshot_lines(
         bar_i, m_v, s_v = macd_pair
         if bar_i < n - 1:
             lines.append(
-                f"**MACD**: הקריאה הבאה מתייחסת לנר **{bar_i + 1}** מתוך {n} — לא בהכרח לנר הימני ביותר."
+                f"**MACD**: הקריאה הבאה מתייחסת לנר **{N(bar_i + 1)}** מתוך **{N(n)}** — לא בהכרח לנר הימני ביותר."
             )
         spread = m_v - s_v
         hist_word = "חיובי" if spread > 0 else "שלילי" if spread < 0 else "באפס (אין פער)"
         lines.append(
-            f"**MACD** ({m_v:.4f}) מול **אות** ({s_v:.4f}) על **אותו נר** (אינדקס {bar_i + 1} בחלון) — "
-            f"פער {spread:+.4f}, כלומר היסטוגרם **{hist_word}** בנקודה הזו על הגרף."
+            f"**MACD** ({N(f'{m_v:.4f}')}) מול **אות** ({N(f'{s_v:.4f}')}) על **אותו נר** (אינדקס **{N(bar_i + 1)}** בחלון) — "
+            f"פער **{N(f'{spread:+.4f}')}**, כלומר היסטוגרם **{hist_word}** בנקודה הזו על הגרף."
         )
         prev_ms = _prev_dual_aligned(macd_line, macd_sig, bar_i)
         if prev_ms:
@@ -392,15 +397,15 @@ def build_ohlcv_snapshot_lines(
         diff_pct = (c - vwap_v) / vwap_v * 100.0 if vwap_v else 0.0
         if abs(diff_pct) < 0.05:
             lines.append(
-                f"**VWAP** בסוף החלון ({vwap_v:.2f}) כמעט זהה לסגירה — המחיר \"יושב\" על מחיר ממוצע משוקלל נפח בתקופה."
+                f"**VWAP** בסוף החלון ({N(f'{vwap_v:.2f}')}) כמעט זהה לסגירה — המחיר \"יושב\" על מחיר ממוצע משוקלל נפח בתקופה."
             )
         elif c > vwap_v:
             lines.append(
-                f"הסגירה **מעל** ה־VWAP ({vwap_v:.2f}), בערך **{diff_pct:+.2f}%** — ביחס למודל VWAP בחלון, לחץ יחסי של קונים."
+                f"הסגירה **מעל** ה־VWAP ({N(f'{vwap_v:.2f}')}), בערך **{N(f'{diff_pct:+.2f}%')}** — ביחס למודל VWAP בחלון, לחץ יחסי של קונים."
             )
         else:
             lines.append(
-                f"הסגירה **מתחת** ל־VWAP ({vwap_v:.2f}), בערך **{diff_pct:+.2f}%** — ביחס למודל VWAP בחלון, לחץ יחסי של מוכרים."
+                f"הסגירה **מתחת** ל־VWAP ({N(f'{vwap_v:.2f}')}), בערך **{N(f'{diff_pct:+.2f}%')}** — ביחס למודל VWAP בחלון, לחץ יחסי של מוכרים."
             )
 
     ten_kij = _last_dual_aligned(ind.get("ichimoku_tenkan"), ind.get("ichimoku_kijun"))
@@ -408,14 +413,16 @@ def build_ohlcv_snapshot_lines(
         _, tv, kv = ten_kij
         if tv > kv:
             lines.append(
-                f"**איצ׳ימוקו**: טנקן ({tv:.2f}) מעל קיג׳ון ({kv:.2f}) בנר האחרון — פרשנות קלאסית: מומנטום קצר־טווח חיובי יחסית."
+                f"**איצ׳ימוקו**: טנקן ({N(f'{tv:.2f}')}) מעל קיג׳ון ({N(f'{kv:.2f}')}) בנר האחרון — פרשנות קלאסית: מומנטום קצר־טווח חיובי יחסית."
             )
         elif tv < kv:
             lines.append(
-                f"**איצ׳ימוקו**: טנקן ({tv:.2f}) מתחת לקיג׳ון ({kv:.2f}) — מומנטום קצר־טווח שלילי יחסית."
+                f"**איצ׳ימוקו**: טנקן ({N(f'{tv:.2f}')}) מתחת לקיג׳ון ({N(f'{kv:.2f}')}) — מומנטום קצר־טווח שלילי יחסית."
             )
         else:
-            lines.append(f"**איצ׳ימוקו**: טנקן וקיג׳ון כמעט שווים ({tv:.2f}) — שיווי משקל בין קצר לבינוני בחלון.")
+            lines.append(
+                f"**איצ׳ימוקו**: טנקן וקיג׳ון כמעט שווים ({N(f'{tv:.2f}')}) — שיווי משקל בין קצר לבינוני בחלון."
+            )
 
     if patterns:
         for p in patterns:
@@ -426,9 +433,9 @@ def build_ohlcv_snapshot_lines(
             conf = _to_float(p.get("confidence"))
             tail = ""
             if conf is not None:
-                tail = f" (ביטחון אלגוריתמי ~{conf * 100:.0f}%)"
+                tail = f" (ביטחון אלגוריתמי **{N(f'~{int(conf * 100)}')}%**)"
             at_right = e >= n - 1
-            pos = f"נרות {s + 1}–{e + 1} מתוך {n} בחלון"
+            pos = f"נרות **{N(s + 1)}**–**{N(e + 1)}** מתוך **{N(n)}** בחלון"
             if at_right:
                 pos += " — **התבנית נוגעת בקצה הימני של הגרף** (רלוונטי למה שאתה רואה עכשיו)."
             lines.append(f"זוהתה תבנית **{label}**; {pos}.{tail}")
@@ -458,15 +465,15 @@ def render_ohlcv_snapshot_narrative(
     if last_c is not None:
         regime = build_ohlcv_regime_lines(candles, last_c, ind)
 
-    st.markdown("#### בתכלס — מה הגרף הזה אומר עכשיו על המניה")
+    render_focus_heading(f"**{symbol}** — בתכלס: מה הגרף אומר עכשיו", variant="insight")
     st.caption("לפי הנר הימני ביותר והאינדיקטורים שמחושבים אצלך בחלון — מספרים קונקרטיים מהנתונים.")
-    st.markdown("\n".join(f"- {line}" for line in lines))
+    render_focus_block("\n\n".join(f"- {line}" for line in lines), variant="insight")
     if regime:
-        st.markdown("#### «עתיד», עליות ושלב בתנועה — מה **באמת** אפשר להסיק מהגרף")
+        render_focus_heading("איפה המחיר על ציר התנועה בחלון (לא חיזוי עסקי)", variant="caution")
         st.caption(
             "פרשנות חינוכית: איפה המחיר על **ציר התנועה בחלון** — לא חיזוי עסקי ולא המלצה."
         )
-        st.markdown("\n".join(f"- {line}" for line in regime))
+        render_focus_block("\n\n".join(f"- {line}" for line in regime), variant="caution")
     st.caption(
         "זו קריאה אוטומטית של המערכת על הנתונים שבגרף — לא תחזית, לא המלצה, ולא ייעוץ השקעות."
     )
@@ -489,25 +496,25 @@ def build_portfolio_alpha_lines(
     spy_end = float(spy_vals[-1])
     lines: list[str] = []
     lines.append(
-        f"טווח הזמן על הציר: מ־**{spy_dates[0]}** עד **{spy_dates[-1]}** ({len(spy_dates)} נקודות) — "
+        f"טווח הזמן על הציר: מ־**{N(str(spy_dates[0]))}** עד **{N(str(spy_dates[-1]))}** (**{N(len(spy_dates))}** נקודות) — "
         f"זה אותו חלון שבו חושבו אחוזי התשואה בכרטיסיות למעלה."
     )
     lines.append(
-        f"הקו המנוקד (**{benchmark}**, כתום) מנורמל כך שהתחלה = **{start_value:,.0f}** דולר. "
-        f"הנקודה **הימנית** על הקו הזה בערך **{spy_end:,.2f}** דולר — כלומר תשואה של **{spy_ret:+.2f}%** על המדד באותה תקופה."
+        f"הקו המנוקד (**{benchmark}**, כתום) מנורמל כך שהתחלה = **{N(f'{start_value:,.0f}')}** דולר. "
+        f"הנקודה **הימנית** על הקו הזה בערך **{N(f'{spy_end:,.2f}')}** דולר — כלומר תשואה של **{N(f'{spy_ret:+.2f}%')}** על המדד באותה תקופה."
     )
     lines.append(
-        f"הקו הירוק הוא **רק שני קצוות**: התחלה ({start_value:,.0f}) וסוף (**{current_equity:,.2f}**) — "
-        f"זה שווי התיק שלך **עכשיו** לעומת בסיס ההשוואה; תשואת התיק בחלון: **{portfolio_ret:+.2f}%**."
+        f"הקו הירוק הוא **רק שני קצוות**: התחלה ({N(f'{start_value:,.0f}')}) וסוף (**{N(f'{current_equity:,.2f}')}**) — "
+        f"זה שווי התיק שלך **עכשיו** לעומת בסיס ההשוואה; תשואת התיק בחלון: **{N(f'{portfolio_ret:+.2f}%')}**."
     )
     if alpha_val > 0:
         lines.append(
-            f"בסוף החלון התיק **מוביל** את המדד ב־**{alpha_val:+.2f}%** (אלפא חיובית) — "
+            f"בסוף החלון התיק **מוביל** את המדד ב־**{N(f'{alpha_val:+.2f}%')}** (אלפא חיובית) — "
             "זה בדיוק המרווח שאתה רואה בין הנקודה הירוקה הימנית לבין גובה הקו הכתום באותו תאריך."
         )
     elif alpha_val < 0:
         lines.append(
-            f"בסוף החלון התיק **מפגר** אחרי המדד ב־**{alpha_val:+.2f}%** — "
+            f"בסוף החלון התיק **מפגר** אחרי המדד ב־**{N(f'{alpha_val:+.2f}%')}** — "
             "הנקודה הכתומה האחרונה גבוהה יותר מ־שווי התיק שלך ביחס לבסיס ההתחלה."
         )
     else:
@@ -524,9 +531,9 @@ def render_portfolio_alpha_snapshot(
     lines = build_portfolio_alpha_lines(alpha_data, snap, start_value, benchmark)
     if not lines:
         return
-    st.markdown("#### בתכלס — איך לקרוא את **הגרף הספציפי** של התיק שלך")
+    render_focus_heading("בתכלס — הגרף של **התיק שלך** (מספרים מה־API)", variant="insight")
     st.caption("מספרים מה-API ומהנקודות שמוצגות — לא תיאוריה כללית.")
-    st.markdown("\n".join(f"- {line}" for line in lines))
+    render_focus_block("\n\n".join(f"- {line}" for line in lines), variant="insight")
     st.caption(
         "זו קריאה אוטומטית על בסיס הנתונים שנטענו — לא ייעוץ השקעות."
     )
@@ -546,25 +553,29 @@ def build_blind_price_lines(chart_data: list[dict[str, Any]], price_snap: float)
     hi, lo = max(prices), min(prices)
     lines: list[str] = []
     lines.append(
-        f"יש **{len(prices)}** נקודות מחיר בגרף; כולן נגזרות ממכפיל יחסי על מחיר ה־snapshot (**{price_snap:.2f}** דולר)."
+        f"יש **{N(len(prices))}** נקודות מחיר בגרף; כולן נגזרות ממכפיל יחסי על מחיר ה־snapshot (**{N(f'{price_snap:.2f}')}** דולר)."
     )
     lines.append(
-        f"הנקודה **השמאלית** (העבר הרחוק בחלון) בערך **{first_p:.2f}**; ה**ימנית** (הקרובה ל־snapshot) **{last_p:.2f}**."
+        f"הנקודה **השמאלית** (העבר הרחוק בחלון) בערך **{N(f'{first_p:.2f}')}**; ה**ימנית** (הקרובה ל־snapshot) **{N(f'{last_p:.2f}')}**."
     )
     chg = (last_p - first_p) / first_p * 100.0 if first_p else 0.0
     if last_p > first_p * 1.02:
-        lines.append(f"במסגרת הגרף יש **עליה** גסה של כ־{chg:+.1f}% מהשמאל לימין — לפני שמסיקים, לשלב עם המדדים למעלה.")
+        lines.append(
+            f"במסגרת הגרף יש **עליה** גסה של כ־**{N(f'{chg:+.1f}%')}** מהשמאל לימין — לפני שמסיקים, לשלב עם המדדים למעלה."
+        )
     elif last_p < first_p * 0.98:
-        lines.append(f"במסגרת הגרף יש **ירידה** גסה של כ־{chg:+.1f}% — שוב, רק הקשר של התרחיש.")
+        lines.append(
+            f"במסגרת הגרף יש **ירידה** גסה של כ־**{N(f'{chg:+.1f}%')}** — שוב, רק הקשר של התרחיש."
+        )
     else:
         lines.append("במסגרת הגרף המחיר **דשדש** סביב טווח צר יחסית — פחות מגמה ברורה בנקודות שמוצגות.")
     above = sum(1 for p in prices if p >= price_snap)
     lines.append(
-        f"קו ה־snapshot (**{price_snap:.2f}**): **{above}** מתוך {len(prices)} נקודות מעליו או עליו, "
-        f"**{len(prices) - above}** מתחתיו — כלומר איפה המחיר היה ביחס לרמת ההחלטה לאורך החלון."
+        f"קו ה־snapshot (**{N(f'{price_snap:.2f}')}**): **{N(above)}** מתוך **{N(len(prices))}** נקודות מעליו או עליו, "
+        f"**{N(len(prices) - above)}** מתחתיו — כלומר איפה המחיר היה ביחס לרמת ההחלטה לאורך החלון."
     )
     lines.append(
-        f"שיא בחלון: **{hi:.2f}**, שפל: **{lo:.2f}** — רואים כמה \"מרחק\" היה מהקצוות לעומת מחיר ה־snapshot."
+        f"שיא בחלון: **{N(f'{hi:.2f}')}**, שפל: **{N(f'{lo:.2f}')}** — רואים כמה \"מרחק\" היה מהקצוות לעומת מחיר ה־snapshot."
     )
     return lines
 
@@ -573,8 +584,8 @@ def render_blind_price_snapshot(chart_data: list[dict[str, Any]], price_snap: fl
     lines = build_blind_price_lines(chart_data, price_snap)
     if not lines:
         return
-    st.markdown("#### בתכלס — איך לקרוא את **הגרף של התרחיש** הזה")
-    st.markdown("\n".join(f"- {line}" for line in lines))
+    render_focus_heading("בתכלס — גרף **התרחיש** (אנונימי)", variant="steps")
+    render_focus_block("\n\n".join(f"- {line}" for line in lines), variant="steps")
     st.caption("הנתונים אנונימיים בכוונה; הפרשנות היא על הצורה והמספרים שמוצגים בלבד.")
 
 
@@ -586,11 +597,11 @@ def build_treasury_history_lines(values: list[float]) -> list[str]:
     n = len(values)
     lines: list[str] = []
     lines.append(
-        f"הנקודה **הימנית ביותר** על הגרף = תשואת 10 שנים **העדכנית** בחלון: **{last:.3f}%**."
+        f"הנקודה **הימנית ביותר** על הגרף = תשואת **{N(10)}** שנים **העדכנית** בחלון: **{N(f'{last:.3f}%')}**."
     )
     whole_change = last - first
     lines.append(
-        f"בקצה **השמאלי** של אותו חלון התשואה הייתה **{first:.3f}%** — שינוי של **{whole_change:+.3f}** נקודות אחוז לאורך כל הטווח שמוצג."
+        f"בקצה **השמאלי** של אותו חלון התשואה הייתה **{N(f'{first:.3f}%')}** — שינוי של **{N(f'{whole_change:+.3f}')}** נקודות אחוז לאורך כל הטווח שמוצג."
     )
     tail = values[-21:] if len(values) >= 21 else values
     head = values[:21] if len(values) >= 21 else values
@@ -598,8 +609,8 @@ def build_treasury_history_lines(values: list[float]) -> list[str]:
     avg_head = sum(head) / len(head)
     if len(values) >= 42:
         lines.append(
-            f"ממוצע תשואה על **~20 התצפיות האחרונות**: **{avg_tail:.3f}%**; "
-            f"על **~20 הראשונות** בחלון: **{avg_head:.3f}%** — "
+            f"ממוצע תשואה על **{N('~20')}** **התצפיות האחרונות בחלון**: **{N(f'{avg_tail:.3f}%')}**; "
+            f"על **{N('~20')}** **התצפיות הראשונות** באותו חלון: **{N(f'{avg_head:.3f}%')}** — "
             f"{'המגמה האחרונה חזקה יותר מבתחילת החלון' if avg_tail > avg_head else 'המגמה האחרונה חלשה יותר מבתחילת החלון' if avg_tail < avg_head else 'אין הפרש ממוצע משמעותי בין ראש לזנב החלון'}."
         )
     return lines
@@ -609,6 +620,6 @@ def render_treasury_history_snapshot(values: list[float]) -> None:
     lines = build_treasury_history_lines(values)
     if not lines:
         return
-    st.markdown("#### בתכלס — מה קורה **בגרף התשואות** שמעליך")
-    st.markdown("\n".join(f"- {line}" for line in lines))
+    render_focus_heading("בתכלס — גרף **תשואות אג״ח** (FRED)", variant="neutral")
+    render_focus_block("\n\n".join(f"- {line}" for line in lines), variant="neutral")
     st.caption("נתוני FRED לצורכי למידה; לא ייעוץ.")

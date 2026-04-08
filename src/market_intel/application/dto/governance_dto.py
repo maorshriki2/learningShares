@@ -30,3 +30,4 @@ class GovernanceDashboardDTO(BaseModel):
     highlights_bullish: list[SentenceSentiment]
     highlights_bearish: list[SentenceSentiment]
     corporate_speak_lesson: str
+    explain: dict[str, object] = Field(default_factory=dict)

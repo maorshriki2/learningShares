@@ -10,11 +10,10 @@ import streamlit as st
 
 from market_intel.ui.bootstrap import inject_terminal_theme
 from market_intel.ui.clients.api_client import MarketIntelApiClient
-from market_intel.ui.components.active_recall import render_active_recall_checkpoint
 from market_intel.ui.components.cards import inject_card_css, metric_card, section_divider
 from market_intel.ui.components.glossary import render_glossary_terms
-from market_intel.ui.components.guided_learning import render_guided_learning_sidebar
 from market_intel.ui.components.chart_reading_guide import render_chart_reading_guide
+from market_intel.ui.components.sidebar_nav import render_sidebar_nav
 from market_intel.ui.components.chart_snapshot_narrative import (
     render_treasury_history_snapshot,
 )
@@ -24,6 +23,7 @@ from market_intel.ui.state.session import ensure_api_base
 st.set_page_config(page_title="מאקרו וריבית", layout="wide")
 inject_terminal_theme()
 inject_card_css()
+render_sidebar_nav("macro_sim")
 
 base = ensure_api_base()
 client = MarketIntelApiClient(base)
@@ -32,7 +32,7 @@ st.title("🏦 מאקרו כלכלה וסימולטור ריבית — Macro & W
 render_mentor(MENTOR_MACRO)
 render_glossary_terms(["WACC"])
 section_divider()
-render_guided_learning_sidebar("macro", st.session_state.get("guided_symbol", "AAPL"), show_symbol_input=False)
+st.session_state["guided_symbol"] = str(st.session_state.get("guided_symbol") or "AAPL").strip().upper()
 
 try:
     rates: dict[str, Any] = client.macro_rates()
@@ -74,7 +74,7 @@ if hist_data:
         color_discrete_sequence=["#38bdf8"],
     )
     fig_hist.update_layout(height=280, margin=dict(l=30, r=10, t=40, b=30))
-    st.plotly_chart(fig_hist, width="stretch")
+    st.plotly_chart(fig_hist, use_container_width=True, width="stretch")
     render_chart_reading_guide("macro_treasury_history")
     vals = [float(v) for v in df_hist["value"].tolist() if v == v]
     render_treasury_history_snapshot(vals)
@@ -148,7 +148,7 @@ if st.button("🚀 הרץ סימולציה", type="primary"):
         height=340,
         margin=dict(l=40, r=20, t=40, b=30),
     )
-    st.plotly_chart(fig1, width="stretch")
+    st.plotly_chart(fig1, use_container_width=True, width="stretch")
 
     fig2 = go.Figure()
     fig2.add_trace(
@@ -168,7 +168,7 @@ if st.button("🚀 הרץ סימולציה", type="primary"):
         height=260,
         margin=dict(l=40, r=20, t=40, b=30),
     )
-    st.plotly_chart(fig2, width="stretch")
+    st.plotly_chart(fig2, use_container_width=True, width="stretch")
     render_chart_reading_guide("macro_wacc_simulation")
 
     if shares > 0:
@@ -187,16 +187,3 @@ if st.button("🚀 הרץ סימולציה", type="primary"):
                 hide_index=True,
             )
 
-section_divider()
-render_active_recall_checkpoint(
-    page_key="macro",
-    prompt="מה לרוב קורה לשווי DCF כשה-WACC עולה?",
-    choices=[
-        "השווי עולה כי ההיוון חזק יותר",
-        "השווי יורד כי תזרימים מהוונים בקצב גבוה יותר",
-        "אין השפעה על השווי",
-        "רק החוב נטו משתנה",
-    ],
-    correct_index=1,
-    explanation="עלייה ב-WACC מגדילה את שיעור ההיוון ולכן מורידה את הערך הנוכחי של תזרימים עתידיים.",
-)

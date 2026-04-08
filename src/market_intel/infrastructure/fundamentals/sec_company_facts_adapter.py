@@ -14,8 +14,18 @@ from market_intel.infrastructure.sec.sec_edgar_adapter import SecEdgarHttpAdapte
 from market_intel.modules.fundamentals.statements.balance import balance_sheet_lines
 from market_intel.modules.fundamentals.statements.cashflow import cashflow_lines
 from market_intel.modules.fundamentals.statements.income import income_statement_lines
-from market_intel.modules.fundamentals.xbrl.normalize_statements import annual_series_from_facts
-
+from market_intel.modules.fundamentals.xbrl.normalize_statements import (
+    CAPEX_FALLBACK_TAGS,
+    COST_OF_REVENUE_FALLBACK_TAGS,
+    DEPRECIATION_FALLBACK_TAGS,
+    EQUITY_FALLBACK_TAGS,
+    NET_INCOME_FALLBACK_TAGS,
+    OCF_FALLBACK_TAGS,
+    OPERATING_INCOME_FALLBACK_TAGS,
+    REVENUE_FALLBACK_TAGS,
+    annual_series_from_facts,
+    annual_series_preferred_tags_per_year,
+)
 
 _TAG_MAP: dict[str, tuple[str, str]] = {
     "revenue": ("us-gaap", "Revenues"),
@@ -75,15 +85,7 @@ class SecCompanyFactsFundamentalsAdapter(FundamentalsPort):
     ) -> list[StatementLine]:
         facts = await self._company_facts(symbol)
         series = annual_series_from_facts(facts, _TAG_MAP)
-        all_years = sorted(
-            set().union(*[set(d.keys()) for d in series.values() if d]),
-            reverse=True,
-        )[:years]
-        years_list = sorted(all_years)
-        rev = series.get("revenue", {})
         ni = series.get("net_income", {})
-        gp = series.get("gross_profit", {})
-        oi = series.get("operating_income", {})
         assets = series.get("assets", {})
         liab = series.get("liabilities", {})
         eq = series.get("equity", {})
@@ -91,12 +93,103 @@ class SecCompanyFactsFundamentalsAdapter(FundamentalsPort):
         cl = series.get("current_liabilities", {})
         ocf = series.get("operating_cf", {})
         capex = series.get("capex", {})
+
+        rev = series.get("revenue", {})
+        gp: dict[int, float] = dict(series.get("gross_profit", {}))
+        oi = series.get("operating_income", {})
+
+        if statement_type == StatementType.INCOME:
+            rev_fb = annual_series_preferred_tags_per_year(
+                facts, "us-gaap", REVENUE_FALLBACK_TAGS
+            )
+            if rev_fb:
+                rev = rev_fb
+            gp_tag = annual_series_preferred_tags_per_year(facts, "us-gaap", ("GrossProfit",))
+            gp = dict(gp_tag) if gp_tag else dict(gp)
+            cost_ser = annual_series_preferred_tags_per_year(
+                facts, "us-gaap", COST_OF_REVENUE_FALLBACK_TAGS
+            )
+            for y in set(rev.keys()) | set(cost_ser.keys()):
+                if y in gp:
+                    continue
+                if y in rev and y in cost_ser:
+                    gp[y] = rev[y] - cost_ser[y]
+            oi_fb = annual_series_preferred_tags_per_year(
+                facts, "us-gaap", OPERATING_INCOME_FALLBACK_TAGS
+            )
+            if oi_fb:
+                oi = oi_fb
+            ni_fb = annual_series_preferred_tags_per_year(
+                facts, "us-gaap", NET_INCOME_FALLBACK_TAGS
+            )
+            if ni_fb:
+                ni = ni_fb
+
+        if statement_type == StatementType.BALANCE:
+            eq_fb = annual_series_preferred_tags_per_year(
+                facts, "us-gaap", EQUITY_FALLBACK_TAGS
+            )
+            if eq_fb:
+                eq = eq_fb
+
+        if statement_type == StatementType.CASHFLOW:
+            ocf_fb = annual_series_preferred_tags_per_year(
+                facts, "us-gaap", OCF_FALLBACK_TAGS
+            )
+            if ocf_fb:
+                ocf = ocf_fb
+            capex_fb = annual_series_preferred_tags_per_year(
+                facts, "us-gaap", CAPEX_FALLBACK_TAGS
+            )
+            if capex_fb:
+                capex = capex_fb
+
+        year_union: set[int] = set()
+        for d in series.values():
+            if d:
+                year_union |= set(d.keys())
+        if statement_type == StatementType.INCOME:
+            year_union |= set(rev.keys()) | set(gp.keys()) | set(oi.keys()) | set(ni.keys())
+        elif statement_type == StatementType.BALANCE:
+            year_union |= (
+                set(assets.keys())
+                | set(liab.keys())
+                | set(eq.keys())
+                | set(ca.keys())
+                | set(cl.keys())
+            )
+        elif statement_type == StatementType.CASHFLOW:
+            year_union |= set(ocf.keys()) | set(capex.keys())
+
+        all_years = sorted(year_union, reverse=True)[:years]
+        years_list = sorted(all_years)
+
         fcf: dict[int, float] = {}
         for y in years_list:
             if y in ocf and y in capex:
                 fcf[y] = ocf[y] - abs(capex[y])
 
         if statement_type == StatementType.INCOME:
+            ebitda_direct = annual_series_preferred_tags_per_year(
+                facts,
+                "us-gaap",
+                (
+                    "EarningsBeforeInterestTaxesDepreciationAmortization",
+                    "EarningsBeforeInterestTaxesDepreciationAndAmortization",
+                ),
+            )
+            dep_fallback = annual_series_preferred_tags_per_year(
+                facts, "us-gaap", DEPRECIATION_FALLBACK_TAGS
+            )
+            ebitda_merged: dict[int, float] = dict(ebitda_direct)
+            for y in years_list:
+                if y in ebitda_merged:
+                    continue
+                oyv = oi.get(y) if oi else None
+                dv = dep_fallback.get(y)
+                if oyv is not None and dv is not None:
+                    ebitda_merged[y] = float(oyv) + float(dv)
+            ebitda_arg = ebitda_merged if ebitda_merged else None
             return income_statement_lines(
                 symbol,
                 years_list,
@@ -104,6 +197,7 @@ class SecCompanyFactsFundamentalsAdapter(FundamentalsPort):
                 net_income=ni,
                 gross_profit=gp or None,
                 operating_income=oi or None,
+                ebitda=ebitda_arg,
             )
         if statement_type == StatementType.BALANCE:
             return balance_sheet_lines(

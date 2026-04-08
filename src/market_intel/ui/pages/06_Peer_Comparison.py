@@ -9,18 +9,19 @@ import streamlit as st
 
 from market_intel.ui.bootstrap import inject_terminal_theme
 from market_intel.ui.clients.api_client import MarketIntelApiClient
-from market_intel.ui.components.active_recall import render_active_recall_checkpoint
 from market_intel.ui.components.cards import inject_card_css, metric_card, section_divider
 from market_intel.ui.components.chart_reading_guide import render_chart_reading_guide
 from market_intel.ui.components.financial_snapshot_narrative import render_peer_snapshot
 from market_intel.ui.components.glossary import render_glossary_terms
-from market_intel.ui.components.guided_learning import render_guided_learning_sidebar
+from market_intel.ui.components.sidebar_nav import render_sidebar_nav
 from market_intel.ui.components.mentor_expander import MENTOR_PEERS, render_mentor
 from market_intel.ui.state.session import ensure_api_base
+from market_intel.ui.state.analysis_cache import require_cached
 
 st.set_page_config(page_title="השוואת מתחרים", layout="wide")
 inject_terminal_theme()
 inject_card_css()
+render_sidebar_nav("peers")
 
 base = ensure_api_base()
 client = MarketIntelApiClient(base)
@@ -29,22 +30,32 @@ st.title("📊 השוואת מתחרים — Relative Valuation")
 render_mentor(MENTOR_PEERS)
 render_glossary_terms(["P/E", "EV/EBITDA"])
 section_divider()
+st.info(
+    "מה עושים פה ב‑30 שניות: "
+    "1) האם אני בהנחה/פרמיה ביחס לקבוצה (P/E, EV/EBITDA) "
+    "2) האם האיכות מצדיקה (מרג’ין + צמיחה) "
+    "3) מה הצעד הבא. "
+    "Beginner למעלה; Advanced בהרחבות."
+)
 
 col_s, col_e = st.columns([2, 3])
-symbol = col_s.text_input("סמבול", value=st.session_state.get("guided_symbol", "AAPL")).strip().upper()
-extra_input = col_e.text_input(
-    "מתחרים נוספים (אופציונלי, מופרד בפסיק)",
-    value="",
-    placeholder="לדוגמה: GOOGL, AMZN",
+symbol = (st.session_state.get("guided_symbol") or "AAPL").strip().upper() or "AAPL"
+col_s.markdown(f"**סמבול:** `{symbol}`")
+artifact = require_cached(
+    symbol,
+    base,
+    "analysis_artifact:v1",
+    message_he="אין Artifact שמור. לחץ **ניתוח** בסיידבר כדי לטעון (ברירת מחדל: בלי מתחרים נוספים).",
 )
-symbol = render_guided_learning_sidebar("peers", symbol, show_symbol_input=False)
-
-try:
-    data = client.peer_comparison(symbol, extra_input)
-except Exception as exc:
-    st.error(f"שגיאת API: {exc}")
-    st.info("בדוק שהאפליקציה רצה: `python scripts/run_app.py` (API + ממשק יחד).")
-    st.stop()
+meta = artifact.get("meta") if isinstance(artifact, dict) else {}
+cfg = meta.get("config") if isinstance(meta, dict) else {}
+peers_extra = str(cfg.get("peers_extra") or "")
+if peers_extra:
+    col_e.caption(f"Peers extra used in this artifact: `{peers_extra}` (run Analyze to change).")
+else:
+    col_e.caption("Peers extra used in this artifact: (none). Run Analyze to change.")
+inputs = artifact.get("inputs") if isinstance(artifact, dict) else {}
+data = inputs.get("peers") if isinstance(inputs, dict) else {}
 
 rows: list[dict[str, Any]] = data.get("rows", [])
 avg: dict[str, Any] = data.get("sector_avg", {})
@@ -54,6 +65,44 @@ if not rows:
     st.stop()
 
 subject = next((r for r in rows if r.get("is_subject")), rows[0])
+
+@st.cache_data(show_spinner=False, ttl=6 * 60 * 60)
+def _peers_display_cached(rows: list[dict[str, Any]], avg: dict[str, Any]) -> list[dict[str, Any]]:
+    all_rows = rows + [avg]
+    display: list[dict[str, Any]] = []
+    for r in all_rows:
+        def _pct(v: Any) -> str:
+            if v is None or (isinstance(v, float) and math.isnan(v)):
+                return "—"
+            return f"{float(v) * 100:.1f}%"
+
+        def _round(v: Any, d: int = 1) -> str:
+            if v is None or (isinstance(v, float) and math.isnan(v)):
+                return "—"
+            return f"{float(v):.{d}f}"
+
+        def _mcap(v: Any) -> str:
+            if v is None or (isinstance(v, float) and math.isnan(v)):
+                return "—"
+            b = float(v) / 1e9
+            return f"${b:.1f}B"
+
+        is_subj = r.get("is_subject", False)
+        tag = " ⭐" if is_subj else ""
+        display.append(
+            {
+                "📌 סמבול": r.get("symbol", "") + tag,
+                "🏢 שם": r.get("name", ""),
+                "💰 שווי שוק": _mcap(r.get("market_cap")),
+                "📈 P/E": _round(r.get("pe_ratio")),
+                "⚙️ EV/EBITDA": _round(r.get("ev_ebitda")),
+                "📐 z(P/E)": _round(r.get("z_pe_ratio"), 2),
+                "📐 z(EV/EBITDA)": _round(r.get("z_ev_ebitda"), 2),
+                "💹 מרג'ין תפעולי": _pct(r.get("operating_margin")),
+                "🚀 צמיחת הכנסות": _pct(r.get("revenue_growth")),
+            }
+        )
+    return display
 
 st.markdown("### נתוני הנבחרת")
 c1, c2, c3, c4 = st.columns(4)
@@ -83,41 +132,7 @@ render_chart_reading_guide(
 section_divider()
 st.markdown("### טבלת השוואה מלאה")
 
-all_rows = rows + [avg]
-display = []
-for r in all_rows:
-    def _pct(v: Any) -> str:
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            return "—"
-        return f"{float(v) * 100:.1f}%"
-
-    def _round(v: Any, d: int = 1) -> str:
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            return "—"
-        return f"{float(v):.{d}f}"
-
-    def _mcap(v: Any) -> str:
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            return "—"
-        b = float(v) / 1e9
-        return f"${b:.1f}B"
-
-    is_subj = r.get("is_subject", False)
-    tag = " ⭐" if is_subj else ""
-    display.append(
-        {
-            "📌 סמבול": r.get("symbol", "") + tag,
-            "🏢 שם": r.get("name", ""),
-            "💰 שווי שוק": _mcap(r.get("market_cap")),
-            "📈 P/E": _round(r.get("pe_ratio")),
-            "⚙️ EV/EBITDA": _round(r.get("ev_ebitda")),
-            "📐 z(P/E)": _round(r.get("z_pe_ratio"), 2),
-            "📐 z(EV/EBITDA)": _round(r.get("z_ev_ebitda"), 2),
-            "💹 מרג'ין תפעולי": _pct(r.get("operating_margin")),
-            "🚀 צמיחת הכנסות": _pct(r.get("revenue_growth")),
-        }
-    )
-
+display = _peers_display_cached(rows, avg)
 df = pd.DataFrame(display)
 st.dataframe(df, width="stretch", hide_index=True)
 
@@ -154,7 +169,7 @@ if len(scatter_pts) >= 2:
     )
     fig.update_traces(marker=dict(size=12, opacity=0.85))
     fig.update_layout(height=420, margin=dict(l=40, r=20, t=30, b=40))
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True, width="stretch")
 
 render_peer_snapshot(rows, subject, avg)
 
@@ -188,17 +203,3 @@ if not findings:
 
 for f in findings:
     st.markdown(f)
-
-section_divider()
-render_active_recall_checkpoint(
-    page_key="peers",
-    prompt="איזה שילוב יכול לרמוז על הזדמנות תמחור יחסית?",
-    choices=[
-        "P/E גבוה משמעותית ומרג'ין נמוך",
-        "P/E נמוך יחסית ומרג'ין תפעולי גבוה יחסית",
-        "P/E גבוה ו-EV/EBITDA גבוה",
-        "צמיחה שלילית ומכפיל גבוה",
-    ],
-    correct_index=1,
-    explanation="כאשר החברה יעילה יותר (מרג'ין גבוה) אך נסחרת בזול יחסית (P/E נמוך), ייתכן שיש פער תמחור שכדאי לחקור.",
-)

@@ -59,6 +59,7 @@ Desktop.ini
 
 # --- Project-specific ---
 _exe_test_*.txt
+debug-*.log
 learningSharesDesktop_error.log
 installer_output/
 .tools/

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from market_intel.ui.formatters.bidi_text import ltr_embed
+
 TERM_DEFINITIONS_HE: dict[str, str] = {
     "P/E": "מכפיל רווח: מחיר המניה חלקי הרווח למניה. גבוה = ציפיות צמיחה גבוהות.",
     "ROIC": "תשואה על ההון המושקע: כמה יעילה החברה בייצור רווח מההון.",
@@ -21,7 +23,8 @@ def render_glossary_terms(terms: list[str]) -> None:
             continue
         parts.append(
             f'<span title="{explanation}" style="padding:4px 8px;border:1px solid #334155;'
-            f'border-radius:999px;margin-left:6px;display:inline-block;">{term}</span>'
+            f'border-radius:999px;margin-left:6px;display:inline-block;">'
+            f"{ltr_embed(term)}</span>"
         )
     if parts:
         st.markdown("**מילון מרחף (רחף עם העכבר):**", help="הסבר קצר מיידי למונחים מקצועיים")

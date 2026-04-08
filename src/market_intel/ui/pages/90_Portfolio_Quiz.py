@@ -9,12 +9,11 @@ import streamlit as st
 from market_intel.modules.portfolio.quiz_engine import QuizEngine
 from market_intel.ui.bootstrap import inject_terminal_theme
 from market_intel.ui.clients.api_client import MarketIntelApiClient
-from market_intel.ui.components.active_recall import render_active_recall_checkpoint
 from market_intel.ui.components.cards import inject_card_css, section_divider
 from market_intel.ui.components.chart_reading_guide import render_chart_reading_guide
 from market_intel.ui.components.chart_snapshot_narrative import render_portfolio_alpha_snapshot
 from market_intel.ui.components.glossary import render_glossary_terms
-from market_intel.ui.components.guided_learning import render_guided_learning_sidebar
+from market_intel.ui.components.sidebar_nav import render_sidebar_nav
 from market_intel.ui.components.mentor_expander import MENTOR_PORTFOLIO, render_mentor
 from market_intel.ui.components.portfolio_panel import render_portfolio
 from market_intel.ui.state.session import ensure_api_base
@@ -22,6 +21,7 @@ from market_intel.ui.state.session import ensure_api_base
 st.set_page_config(page_title="תיק נייר וחידונים", layout="wide")
 inject_terminal_theme()
 inject_card_css()
+render_sidebar_nav("portfolio_quiz")
 
 base = ensure_api_base()
 client = MarketIntelApiClient(base)
@@ -29,7 +29,7 @@ client = MarketIntelApiClient(base)
 st.title("💼 תיק נייר מגרש האימונים — Paper Portfolio & Quizzes")
 render_mentor(MENTOR_PORTFOLIO)
 render_glossary_terms(["P/E", "WACC"])
-render_guided_learning_sidebar("portfolio", st.session_state.get("guided_symbol", "AAPL"), show_symbol_input=False)
+st.session_state["guided_symbol"] = str(st.session_state.get("guided_symbol") or "AAPL").strip().upper()
 section_divider()
 
 if "quiz_engine" not in st.session_state:
@@ -117,7 +117,7 @@ with col_alpha:
                 xaxis_title="תאריך",
                 yaxis_title="שווי ($)",
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True, width="stretch")
             render_chart_reading_guide("portfolio_alpha_chart")
             render_portfolio_alpha_snapshot(alpha_data, snap, float(start_value), str(benchmark))
 
@@ -218,17 +218,3 @@ with general_tab:
                 st.error(f"❌ שגוי. תשובה נכונה: {q.choices[q.correct_index]}")
             st.info(expl)
         st.caption(f"ניקוד: {st.session_state.quiz_engine.score}/{st.session_state.quiz_engine.attempts}")
-
-section_divider()
-render_active_recall_checkpoint(
-    page_key="portfolio",
-    prompt="אם יותר מ-50% מהתיק מרוכז בסקטור אחד, מה המשמעות?",
-    choices=[
-        "זה טוב כי זה מגדיל פוטנציאל תשואה בלבד",
-        "זה מעלה סיכון ריכוזיות ותלות בתרחיש אחד",
-        "זה מבטל תנודתיות",
-        "זה משפיע רק על מניות דיבידנד",
-    ],
-    correct_index=1,
-    explanation="ריכוז גבוה בסקטור אחד מגדיל תלות באותו תחום ובכך מעלה סיכון תיק כולל.",
-)

@@ -5,20 +5,21 @@ import streamlit as st
 from market_intel.ui.bootstrap import inject_terminal_theme
 from market_intel.ui.clients.api_client import MarketIntelApiClient
 from market_intel.ui.clients.ws_client import MarketIntelWebSocketClient
-from market_intel.ui.components.active_recall import render_active_recall_checkpoint
 from market_intel.ui.components.cards import inject_card_css, section_divider
+from market_intel.ui.components.sidebar_nav import render_sidebar_nav
 from market_intel.ui.components.chart_plotly import build_candlestick_figure
 from market_intel.ui.components.chart_reading_guide import render_chart_reading_guide
 from market_intel.ui.components.chart_snapshot_narrative import render_ohlcv_snapshot_narrative
 from market_intel.ui.components.education_sidebar import render_pattern_education
 from market_intel.ui.components.glossary import render_glossary_terms
-from market_intel.ui.components.guided_learning import render_guided_learning_sidebar
 from market_intel.ui.components.mentor_expander import MENTOR_CHARTING, render_mentor
 from market_intel.ui.state.session import ensure_api_base
+from market_intel.ui.state.analysis_cache import require_cached
 
 st.set_page_config(page_title="Charting Lab", layout="wide")
 inject_terminal_theme()
 inject_card_css()
+render_sidebar_nav("charting")
 
 base = ensure_api_base()
 client = MarketIntelApiClient(base)
@@ -27,30 +28,29 @@ st.title("📈 Charting Lab — מעבדת גרפים")
 render_mentor(MENTOR_CHARTING)
 render_glossary_terms(["MACD", "VWAP"])
 section_divider()
-symbol = st.text_input("Symbol", value=st.session_state.get("guided_symbol", "AAPL")).strip().upper()
-symbol = render_guided_learning_sidebar("charting", symbol, show_symbol_input=False)
-tf = st.selectbox(
-    "Timeframe",
-    ["1mo", "1wk", "1d", "1h", "15m", "5m", "1m"],
-    index=2,
-    help="עד לאחרונה הוגדר רק עד יומי כדי לפשט את המעבדה ואת המיפוי ל-yfinance; נוספו שבועי וחודשי לתמונה ארוכת טווח.",
+symbol = (st.session_state.get("guided_symbol") or "AAPL").strip().upper() or "AAPL"
+artifact = require_cached(
+    symbol,
+    base,
+    "analysis_artifact:v1",
+    message_he="אין Artifact שמור לטאב הזה. לחץ **ניתוח** בסיידבר מתחת לסימבול כדי לטעון הכל פעם אחת.",
 )
-if not symbol.strip():
-    st.warning("Please enter a valid ticker symbol.")
-    st.stop()
-
-try:
-    payload = client.ohlcv(symbol, timeframe=tf, limit=320)
-except Exception as exc:
-    st.error(f"API error: {exc}")
-    st.stop()
+meta = artifact.get("meta") if isinstance(artifact, dict) else {}
+cfg = meta.get("config") if isinstance(meta, dict) else {}
+tf = str(cfg.get("timeframe") or "1d")
+inputs = artifact.get("inputs") if isinstance(artifact, dict) else {}
+payload = inputs.get("ohlcv") if isinstance(inputs, dict) else {}
 
 candles = payload.get("candles") or []
 indicators = payload.get("indicators") or {}
 patterns = payload.get("patterns") or []
 
-fig = build_candlestick_figure(candles, indicators, patterns)
-st.plotly_chart(fig, width="stretch")
+@st.cache_data(show_spinner=False, ttl=6 * 60 * 60)
+def _candlestick_fig_cached(candles: list[dict[str, Any]], indicators: dict[str, Any], patterns: list[dict[str, Any]]):
+    return build_candlestick_figure(candles, indicators, patterns)
+
+fig = _candlestick_fig_cached(candles, indicators, patterns)
+st.plotly_chart(fig, use_container_width=True, width="stretch")
 render_chart_reading_guide("charting_candles")
 fib = payload.get("fibonacci")
 render_ohlcv_snapshot_narrative(
@@ -103,16 +103,3 @@ else:
 if refresh and st.session_state.get("ws_client"):
     st.write(st.session_state.ws_client.drain())
 
-section_divider()
-render_active_recall_checkpoint(
-    page_key="charting",
-    prompt="אם ה-RSI נמצא מעל 70, מה זה לרוב מסמן?",
-    choices=[
-        "מכירת יתר וסיכוי גבוה לקפיצה מיידית",
-        "קניית יתר ועלייה אפשרית בסיכון לתיקון",
-        "שהמניה זולה פונדמנטלית",
-        "שאין משמעות לאינדיקטור",
-    ],
-    correct_index=1,
-    explanation="RSI מעל 70 נתפס כאזור קניית יתר. זה לא מבטיח ירידה מיידית, אבל מעלה את הסיכון לתנודתיות/תיקון.",
-)

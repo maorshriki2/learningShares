@@ -10,7 +10,6 @@ from market_intel.domain.entities.instrument import Instrument
 from market_intel.domain.value_objects.sector import Sector
 from market_intel.domain.value_objects.symbol import Symbol
 
-
 SECTOR_MAP: dict[str, Sector] = {
     "Technology": Sector.TECHNOLOGY,
     "Healthcare": Sector.HEALTHCARE,
@@ -76,8 +75,15 @@ async def last_price_and_shares(symbol: str) -> tuple[float | None, float | None
     def _sync() -> tuple[float | None, float | None]:
         t = yf.Ticker(symbol)
         fi = t.fast_info
+        info = t.info or {}
         px = fi.get("last_price") or fi.get("regular_market_price")
-        sh = (t.info or {}).get("sharesOutstanding")
+        if px is None:
+            px = (
+                info.get("regularMarketPrice")
+                or info.get("currentPrice")
+                or info.get("previousClose")
+            )
+        sh = info.get("sharesOutstanding") or info.get("impliedSharesOutstanding")
         return (float(px) if px is not None else None, float(sh) if sh is not None else None)
 
     return await asyncio.to_thread(_sync)

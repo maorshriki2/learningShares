@@ -10,6 +10,7 @@ from typing import Any
 
 from market_intel.application.dto.fundamentals_dto import ForensicFlagDTO
 from market_intel.modules.fundamentals.xbrl.parse_facts import extract_tag_history
+from market_intel.ui.formatters.bidi_text import md_code as _md
 
 
 def _year_map_from_hist(hist: list[tuple[str, float]]) -> dict[int, float]:
@@ -72,8 +73,9 @@ def _beneish_m_score(
     ocf: dict[int, float],
     ltd: dict[int, float],
     cl: dict[int, float],
-) -> tuple[float | None, str | None]:
-    """Beneish M-Score approximation from annual maps. Returns (m, error)."""
+    total_liab: dict[int, float],
+) -> tuple[float | None, str | None, str | None, dict[str, object]]:
+    """Beneish M-Score approximation from annual maps. Returns (m, error, lvgi_note, explain)."""
 
     def gv(d: dict[int, float], y: int) -> float | None:
         v = d.get(y)
@@ -82,14 +84,14 @@ def _beneish_m_score(
     s_t, s_t1 = gv(sales, t), gv(sales, t1)
     r_t, r_t1 = gv(rec, t), gv(rec, t1)
     if not all([s_t, s_t1, r_t, r_t1]) or s_t <= 0 or s_t1 <= 0:
-        return None, "חסרים נתוני מכירות/חובות לקוחות לשנים השוואתיות"
+        return None, "חסרים נתוני מכירות/חובות לקוחות לשנים השוואתיות", None, {}
 
     dsri_num = (r_t / s_t) / max((r_t1 / s_t1), 1e-9)
 
     cg_t = gv(cogs, t)
     cg_t1 = gv(cogs, t1)
     if cg_t is None or cg_t1 is None:
-        return None, "חסר Cost of Revenue ל־Beneish"
+        return None, "חסר Cost of Revenue ל־Beneish", None, {}
     gmi_t = (s_t - cg_t) / s_t
     gmi_t1 = (s_t1 - cg_t1) / s_t1
     gmi = (gmi_t1 / max(gmi_t, 1e-9)) if gmi_t > 0 else 1.0
@@ -98,7 +100,7 @@ def _beneish_m_score(
     ppe_t, ppe_t1 = gv(ppe, t), gv(ppe, t1)
     ta_t, ta_t1 = gv(ta, t), gv(ta, t1)
     if None in (ca_t, ca_t1, ppe_t, ppe_t1, ta_t, ta_t1) or ta_t <= 0 or ta_t1 <= 0:
-        return None, "חסרים נתוני מאזן (נכסים/סעיפים) ל־AQI"
+        return None, "חסרים נתוני מאזן (נכסים/סעיפים) ל־AQI", None, {}
 
     aqi = (1.0 - (ca_t + ppe_t) / ta_t) / max(1e-9, (1.0 - (ca_t1 + ppe_t1) / ta_t1))
 
@@ -106,30 +108,49 @@ def _beneish_m_score(
 
     dep_t, dep_t1 = gv(dep, t), gv(dep, t1)
     if dep_t is None or dep_t1 is None:
-        return None, "חסר פחת ל־DEPI"
+        return None, "חסר פחת ל־DEPI", None, {}
     ppe_denom_t = ppe_t + dep_t
     ppe_denom_t1 = ppe_t1 + dep_t1
     if ppe_denom_t <= 0 or ppe_denom_t1 <= 0:
-        return None, "פחת/PPE לא תקינים"
+        return None, "פחת/PPE לא תקינים", None, {}
     depi = (dep_t1 / ppe_denom_t1) / max(dep_t / ppe_denom_t, 1e-9)
 
     sga_t, sga_t1 = gv(sga, t), gv(sga, t1)
     if sga_t is None or sga_t1 is None:
-        return None, "חסר SGA ל־SGAI"
+        return None, "חסר SGA ל־SGAI", None, {}
     sgai = (sga_t / s_t) / max(sga_t1 / s_t1, 1e-9)
 
     ni_t, ocf_t = gv(ni, t), gv(ocf, t)
     if ni_t is None or ocf_t is None or ta_t <= 0:
-        return None, "חסר רווח נקי או תזרים תפעולי ל־TATA"
+        return None, "חסר רווח נקי או תזרים תפעולי ל־TATA", None, {}
     tata = (ni_t - ocf_t) / ta_t
 
     ltd_t, ltd_t1 = gv(ltd, t), gv(ltd, t1)
     cl_t, cl_t1 = gv(cl, t), gv(cl, t1)
-    if None in (ltd_t, ltd_t1, cl_t, cl_t1) or ta_t <= 0 or ta_t1 <= 0:
-        return None, "חסרים חוב ל־LVGI"
-    lev_t = (ltd_t + cl_t) / ta_t
-    lev_t1 = (ltd_t1 + cl_t1) / ta_t1
-    lvgi = lev_t / max(lev_t1, 1e-9)
+    tl_t, tl_t1 = gv(total_liab, t), gv(total_liab, t1)
+
+    lvgi_note: str | None = None
+
+    if None not in (ltd_t, ltd_t1, cl_t, cl_t1):
+        lev_t = (ltd_t + cl_t) / ta_t
+        lev_t1 = (ltd_t1 + cl_t1) / ta_t1
+        lvgi = lev_t / max(lev_t1, 1e-9)
+    elif None not in (tl_t, tl_t1):
+        # Many filers omit standalone LongTermDebt; TL/TA YoY captures leverage similarly.
+        lev_t = tl_t / ta_t
+        lev_t1 = tl_t1 / ta_t1
+        lvgi = lev_t / max(lev_t1, 1e-9)
+        lvgi_note = (
+            f"- {_md('LVGI')}: מחושב מ־{_md('Total Liabilities / Total Assets')} "
+            f"כי {_md('long-term debt')} לא זמין ב־{_md('XBRL')}."
+        )
+    else:
+        return (
+            None,
+            "חסרים נתוני התחייבויות ל־LVGI (חוב ארוך+שוטף או סה״כ התחייבויות).",
+            None,
+            {},
+        )
 
     m = (
         -4.84
@@ -142,7 +163,50 @@ def _beneish_m_score(
         + 4.679 * tata
         - 0.327 * lvgi
     )
-    return float(m), None
+
+    explain: dict[str, object] = {
+        "years": {"t": t, "t1": t1},
+        "components": {
+            "DSRI": float(dsri_num),
+            "GMI": float(gmi),
+            "AQI": float(aqi),
+            "SGI": float(sgi),
+            "DEPI": float(depi),
+            "SGAI": float(sgai),
+            "TATA": float(tata),
+            "LVGI": float(lvgi),
+        },
+        "raw_inputs": {
+            "sales_t": float(s_t),
+            "sales_t1": float(s_t1),
+            "receivables_t": float(r_t),
+            "receivables_t1": float(r_t1),
+            "cogs_t": float(cg_t),
+            "cogs_t1": float(cg_t1),
+            "current_assets_t": float(ca_t),
+            "current_assets_t1": float(ca_t1),
+            "ppe_t": float(ppe_t),
+            "ppe_t1": float(ppe_t1),
+            "total_assets_t": float(ta_t),
+            "total_assets_t1": float(ta_t1),
+            "depreciation_t": float(dep_t),
+            "depreciation_t1": float(dep_t1),
+            "sga_t": float(sga_t),
+            "sga_t1": float(sga_t1),
+            "net_income_t": float(ni_t),
+            "ocf_t": float(ocf_t),
+            "ltd_t": float(ltd_t) if ltd_t is not None else None,
+            "ltd_t1": float(ltd_t1) if ltd_t1 is not None else None,
+            "current_liabilities_t": float(cl_t) if cl_t is not None else None,
+            "current_liabilities_t1": float(cl_t1) if cl_t1 is not None else None,
+            "total_liabilities_t": float(tl_t) if tl_t is not None else None,
+            "total_liabilities_t1": float(tl_t1) if tl_t1 is not None else None,
+        },
+        "thresholds": {"manipulator_zone_if_gt": -1.78},
+        "lvgi_note": lvgi_note,
+    }
+
+    return float(m), None, lvgi_note, explain
 
 
 def run_forensic_analysis(
@@ -159,7 +223,10 @@ def run_forensic_analysis(
                 severity="info",
                 code="insufficient_history",
                 title_he="חסרה היסטוריה שנתית כפולה",
-                detail_he="הבדיקות הפורנזיות דורשות לפחות שתי שנות דוח זמינות.",
+                detail_he=(
+                    "- נדרשות לפחות " + _md(2) + " שנות דוח זמינות.\n"
+                    "- בלי זה אין השוואה שנתית אמינה."
+                ),
             )
         ]
 
@@ -177,11 +244,29 @@ def run_forensic_analysis(
                     code="earnings_quality_cfo",
                     title_he="איכות רווח — דגל אדום",
                     detail_he=(
-                        f"הרווח הנקי עלה מ־{ni_p:,.0f} ל־{ni_l:,.0f} (שנה {prior_y}→{latest_y}), "
-                        f"אבל תזרים מפעילות שוטפת **ירד** מ־{ocf_p:,.0f} ל־{ocf_l:,.0f}. "
-                        "בפורנזיקה חשבונאית זה לעיתים סימן שרווחים \"איכותיים\" פחות או שינויים בתזמון מזומנים — "
-                        "לא הוכחה להונאה; דורש בדיקת accruals והערות בדוח."
+                        "**איכות רווח — אי־התאמה**\n\n"
+                        "**נתונים מהדוח:**\n"
+                        f"- {_md('Net Income')}: {_md(f'{ni_p:,.0f}')} → {_md(f'{ni_l:,.0f}')} "
+                        f"(שנות דוח {_md(prior_y)} → {_md(latest_y)}).\n"
+                        f"- {_md('Operating cash flow')}: {_md(f'{ocf_p:,.0f}')} → {_md(f'{ocf_l:,.0f}')} "
+                        "(**ירידה**).\n\n"
+                        "**פירוש קצר:**\n"
+                        "- רווח עולה כשהתזרים התפעולי יורד — לבדוק accruals והערות בדוח.\n"
+                        "- זה **לא** הוכחה להונאה."
                     ),
+                    explain={
+                        "latest_year": latest_y,
+                        "prior_year": prior_y,
+                        "net_income_latest": float(ni_l),
+                        "net_income_prior": float(ni_p),
+                        "ocf_latest": float(ocf_l),
+                        "ocf_prior": float(ocf_p),
+                        "thresholds": {
+                            "ni_up_factor": 1.03,
+                            "ocf_down_factor": 0.97,
+                        },
+                        "triggered": {"ni_up": True, "ocf_down": True},
+                    },
                 )
             )
 
@@ -211,14 +296,33 @@ def run_forensic_analysis(
                         ForensicFlagDTO(
                             severity="medium",
                             code="dso_stretch",
-                            title_he="Days Sales Outstanding (DSO) — התארכות גבייה",
+                            title_he=f"התארכות גבייה — {_md('DSO')}",
                             detail_he=(
-                                f"מוערך ימי מכירה מוצגים (Receivables/Revenue×365): "
-                                f"~{dso_l:.0f} ימים ב־{latest_y} לעומת ~{dso_p:.0f} ב־{prior_y} "
-                                f"(שינוי של כ־{change * 100:.0f}%). "
-                                "התארכות גבייה יכולה להעיד על לחץ על לקוחות, הכרה מוקדמת של הכנסות, או שינוי תנאי אשראי — "
-                                "כדאי להשוות לתעשייה ולדוח המלא."
+                                f"**מה זה {_md('DSO')}?**\n"
+                                "- ימים משוערים עד גביית מכירות.\n"
+                                f"- השנים הן {_md('fiscal year')} מהדוח — לא בהכרח היום בלוח שנה.\n\n"
+                                "**מספרים:**\n"
+                                f"- שנת דוח {_md(latest_y)}: בערך {_md(f'{dso_l:.0f}')} ימים.\n"
+                                f"- שנת דוח {_md(prior_y)}: בערך {_md(f'{dso_p:.0f}')} ימים.\n"
+                                f"- שינוי: {_md(f'{change * 100:.0f}%')} (סף אזהרה: {_md('>12%')}).\n\n"
+                                "**נוסחה (הערכה גסה):**\n\n"
+                                f"{_md('(Receivables / Revenue) * 365')}\n\n"
+                                "**למה זה מדאיג:**\n"
+                                "- גבייה איטית יותר.\n"
+                                "- השוו לענף ולדוח המלא."
                             ),
+                            explain={
+                                "latest_year": latest_y,
+                                "prior_year": prior_y,
+                                "receivables_latest": float(ar_l),
+                                "receivables_prior": float(ar_p),
+                                "revenue_latest": float(rev_l),
+                                "revenue_prior": float(rev_p),
+                                "dso_latest": float(dso_l),
+                                "dso_prior": float(dso_p),
+                                "change_pct": float(change * 100.0),
+                                "thresholds": {"dso_change_pct_gt": 12.0},
+                            },
                         )
                     )
 
@@ -259,9 +363,18 @@ def run_forensic_analysis(
     ltd = _first_tag_map(
         facts,
         "us-gaap",
-        ("LongTermDebtNoncurrent", "LongTermDebt"),
+        (
+            "LongTermDebtNoncurrent",
+            "LongTermDebtAndCapitalLeaseObligations",
+            "LongTermDebt",
+            "LongTermDebtNoncurrentNetOfUnamortizedDiscountPremiumAndDebtIssuanceCosts",
+            "DebtNoncurrent",
+            "SecuredLongTermDebt",
+            "UnsecuredLongTermDebt",
+        ),
     )
     cl_map = _first_tag_map(facts, "us-gaap", ("LiabilitiesCurrent",))
+    total_liab_map = _first_tag_map(facts, "us-gaap", ("Liabilities",))
 
     for yk, lab in ((latest_y, "Net Income"), (prior_y, "Net Income")):
         v = _get_year(by_year, yk, lab)
@@ -272,10 +385,20 @@ def run_forensic_analysis(
         if v is not None and yk not in ocf_map:
             ocf_map[yk] = v
 
+    for yk in (latest_y, prior_y):
+        v = _get_year(by_year, yk, "Current Liabilities")
+        if v is not None and yk not in cl_map:
+            cl_map[yk] = v
+        v2 = _get_year(by_year, yk, "Total Liabilities")
+        if v2 is not None and yk not in total_liab_map:
+            total_liab_map[yk] = v2
+
     if not rec:
-        m_score, err = None, "אין מפת חובות לקוחות מספיקת ל־Beneish"
+        m_score, err, lvgi_note, m_explain = None, (
+            "אין מפת " + _md("Receivables") + " מספיקה ל־" + _md("Beneish")
+        ), None, {}
     else:
-        m_score, err = _beneish_m_score(
+        m_score, err, lvgi_note, m_explain = _beneish_m_score(
             latest_y,
             prior_y,
             sales,
@@ -290,19 +413,27 @@ def run_forensic_analysis(
             ocf_map,
             ltd,
             cl_map,
+            total_liab_map,
         )
     if m_score is not None:
         manipulator_zone = m_score > -1.78
+        detail_parts = [
+            f"- מודל {_md('Beneish')}: מעריך **הסתברות** למניפולציה ברווחים — **לא** הוכחה.\n"
+            "- מבוסס דיווחים שנתיים.\n\n"
+            "**סף נפוץ בפרשנות:**\n"
+            f"- מעל {_md('-1.78')} → לרוב אזור **סיכון מוגבר**.\n"
+            f"- מתחת ל־{_md('-1.78')} → לרוב נחשב יותר \"צפוי\".\n\n"
+            "- לא ייעוץ השקעה — רק אות לבדיקה נוספת.\n",
+        ]
+        if lvgi_note:
+            detail_parts.append("\n" + lvgi_note)
         flags.append(
             ForensicFlagDTO(
                 severity="high" if manipulator_zone else "info",
                 code="beneish_m",
-                title_he=f"Beneish M-Score ≈ {m_score:.3f}",
-                detail_he=(
-                    "מדד סטטיסטי לזיהוי **הסתברות** למניפולציה ברווחים (מודל Beneish; מבוסס דיווחים שנתיים). "
-                    f"ערך מעל **‎-1.78** נחשב לרוב לאזור **סיכון מוגבר** בהתפלגות המקורית — לא אבחנה ולא הוכחה. "
-                    "ערך נמוך מ־‎-1.78 נחשב לרוב \"צפוי\" יותר."
-                ),
+                title_he=f"{_md('Beneish')} {_md('M-Score')} ≈ {_md(f'{m_score:.3f}')}",
+                detail_he="".join(detail_parts),
+                explain=m_explain,
             )
         )
     elif err:
@@ -310,8 +441,13 @@ def run_forensic_analysis(
             ForensicFlagDTO(
                 severity="info",
                 code="beneish_skip",
-                title_he="Beneish M-Score — לא חושב",
-                detail_he=f"לא ניתן להשלים את כל רכיבי הנוסחה: {err}",
+                title_he=f"{_md('Beneish')} — לא חושב (חסרים נתונים)",
+                detail_he=(
+                    f"- לא חישבנו {_md('Beneish')} — חסרים שדות שנתיים.\n"
+                    f"- לדוגמה: {_md('Revenue')}, {_md('Receivables')}.\n\n"
+                    f"**פירוט טכני:**\n{err}"
+                ),
+                explain={"error": err},
             )
         )
 
@@ -322,8 +458,11 @@ def run_forensic_analysis(
                 code="no_major_flags",
                 title_he="לא זוהו דגלים חזקים מהבדיקות האוטומטיות",
                 detail_he=(
-                    "המערכת לא מצאה את התבניות שסימנו (רווח מול CFO, DSO, או Beneish חריג). "
-                    "זה לא אומר שהדוח \"נקי\" — רק שההיוריסטיקות לא התריעו."
+                    "- לא נמצאו דפוסים חזקים מול:\n"
+                    f"  - איכות רווח מול {_md('CFO')}.\n"
+                    f"  - התארכות {_md('DSO')}.\n"
+                    f"  - {_md('Beneish')} חריג.\n"
+                    "- זה **לא** אומר שהדוח \"נקי\"."
                 ),
             )
         )

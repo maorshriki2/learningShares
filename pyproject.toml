@@ -23,9 +23,11 @@ dependencies = [
     "redis[hiredis]>=5.2.1",
     "sentencepiece>=0.2.0",
     "streamlit>=1.41.1",
+    "streamlit-autorefresh>=1.0.1",
     "tenacity>=9.0.0",
     "torch>=2.5.1",
     "transformers>=4.47.1",
+    "torchvision>=0.20.0",
     "uvicorn[standard]>=0.34.0",
     "websocket-client>=1.8.0",
     "websockets>=14.1",
@@ -48,6 +50,8 @@ where = ["src"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+# So `pytest` finds `market_intel` without setting PYTHONPATH in the shell.
+pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 100

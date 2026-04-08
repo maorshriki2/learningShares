@@ -6,3 +6,9 @@ developmentMode = false
 headless = true
 enableXsrfProtection = false
 enableCORS = false
+
+[client]
+showSidebarNavigation = false
+
+[theme]
+base = "dark"

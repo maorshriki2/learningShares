@@ -12,6 +12,7 @@ def income_statement_lines(
     net_income: dict[int, float],
     gross_profit: dict[int, float] | None = None,
     operating_income: dict[int, float] | None = None,
+    ebitda: dict[int, float] | None = None,
 ) -> list[StatementLine]:
     lines: list[StatementLine] = []
     for y in years:
@@ -43,6 +44,16 @@ def income_statement_lines(
                     concept="OperatingIncomeLoss",
                     fiscal_period_end=fy,
                     value=operating_income[y],
+                    statement_type=StatementType.INCOME,
+                )
+            )
+        if ebitda and y in ebitda:
+            lines.append(
+                StatementLine(
+                    label="EBITDA",
+                    concept="EarningsBeforeInterestTaxesDepreciationAmortization",
+                    fiscal_period_end=fy,
+                    value=ebitda[y],
                     statement_type=StatementType.INCOME,
                 )
             )

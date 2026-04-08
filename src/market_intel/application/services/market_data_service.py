@@ -20,6 +20,20 @@ class MarketDataService:
     def __init__(self, historical: YFinanceHistoricalAdapter) -> None:
         self._historical = historical
 
+    @staticmethod
+    def annualized_volatility_from_close(
+        close: pd.Series, periods_per_year: int = 252
+    ) -> float | None:
+        if close is None or close.empty:
+            return None
+        rets = close.astype(float).pct_change().dropna()
+        if rets.empty:
+            return None
+        vol = float(rets.std(ddof=0)) * (periods_per_year**0.5)
+        if vol != vol:  # NaN
+            return None
+        return vol
+
     async def historical_frame(
         self,
         symbol: str,
@@ -48,23 +62,42 @@ class MarketDataService:
     def detect_patterns(self, df: pd.DataFrame) -> list[PatternDTO]:
         out: list[PatternDTO] = []
         for p in detect_head_and_shoulders(df):
+            meta = dict(p.meta)
+            meta.setdefault(
+                "thresholds",
+                {
+                    "order": 3,
+                    "symmetry_tolerance": 0.04,
+                    "neckline_break_frac": 0.002,
+                },
+            )
             out.append(
                 PatternDTO(
                     name=p.name,
                     start_index=p.start_index,
                     end_index=p.end_index,
                     confidence=p.confidence,
-                    meta=dict(p.meta),
+                    meta=meta,
                 )
             )
         for p in detect_bull_flag(df):
+            meta = dict(p.meta)
+            meta.setdefault(
+                "thresholds",
+                {
+                    "pole_lookback": 12,
+                    "flag_lookback": 10,
+                    "min_pole_return": 0.03,
+                    "max_flag_depth": 0.02,
+                },
+            )
             out.append(
                 PatternDTO(
                     name=p.name,
                     start_index=p.start_index,
                     end_index=p.end_index,
                     confidence=p.confidence,
-                    meta=dict(p.meta),
+                    meta=meta,
                 )
             )
         return out

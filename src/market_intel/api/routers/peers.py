@@ -40,9 +40,17 @@ async def peer_comparison(
     rows = await build_peer_table(symbol.upper(), extra_peers=extras)
     data = [_row(r) for r in rows]
 
+    zscore_explain: dict[str, Any] = {"includes_subject": True, "metrics": {}}
+
     def _attach_zscores(rows_data: list[dict[str, Any]], key: str, out_key: str) -> None:
         vals = [float(r[key]) for r in rows_data if r.get(key) is not None]
-        if len(vals) < 2:
+        n = len(vals)
+        zscore_explain["metrics"][key] = {
+            "n": n,
+            "mean": statistics.mean(vals) if n else None,
+            "stdev": statistics.stdev(vals) if n >= 2 else None,
+        }
+        if n < 2:
             return
         mu = statistics.mean(vals)
         sd = statistics.stdev(vals)
@@ -72,4 +80,12 @@ async def peer_comparison(
         "price": None,
         "is_subject": False,
     }
-    return {"rows": data, "sector_avg": sector_avg}
+    return {
+        "rows": data,
+        "sector_avg": sector_avg,
+        "explain": {
+            "peer_symbols": [r.get("symbol") for r in data if r.get("symbol")],
+            "extra_requested": extras,
+            "zscore": zscore_explain,
+        },
+    }

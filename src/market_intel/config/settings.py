@@ -19,6 +19,8 @@ class Settings(BaseSettings):
 
     polygon_api_key: str | None = Field(default=None, validation_alias="POLYGON_API_KEY")
     finnhub_api_key: str | None = Field(default=None, validation_alias="FINNHUB_API_KEY")
+    fmp_api_key: str | None = Field(default=None, validation_alias="FMP_API_KEY")
+    newsapi_key: str | None = Field(default=None, validation_alias="NEWSAPI_KEY")
 
     api_host: str = Field(default="127.0.0.1", validation_alias="API_HOST")
     api_port: int = Field(default=8000, validation_alias="API_PORT")
@@ -46,6 +48,26 @@ class Settings(BaseSettings):
         default="claude-3-5-haiku-20241022",
         validation_alias="ANTHROPIC_MODEL",
     )
+
+    # Social (X via Nitter-compatible instances)
+    # Comma-separated base URLs, e.g. "http://127.0.0.1:8080,https://nitter.poast.org"
+    nitter_instances: str | None = Field(default=None, validation_alias="NITTER_INSTANCES")
+
+    @property
+    def nitter_instances_list(self) -> list[str]:
+        raw = (self.nitter_instances or "").strip()
+        if not raw:
+            return []
+        out: list[str] = []
+        for part in raw.split(","):
+            u = part.strip()
+            if not u:
+                continue
+            # Normalize: no trailing slash so downstream URL joins are consistent.
+            while u.endswith("/"):
+                u = u[:-1]
+            out.append(u)
+        return out
 
 
 @lru_cache

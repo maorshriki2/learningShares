@@ -33,13 +33,37 @@ class YFinanceHistoricalAdapter:
         interval = _INTERVAL_MAP[timeframe]
         ticker = yf.Ticker(symbol)
 
+        def _choose_period(interval0: str, limit0: int) -> str:
+            """
+            yfinance's `history()` behaves differently depending on which params are passed.
+            When `start`/`end` are None, use an explicit `period` so we don't accidentally get
+            a very short default window (often ~1 month), which breaks feature engineering.
+            """
+            if interval0 in ("1m", "5m", "15m", "60m"):
+                # Intraday periods are restricted anyway; leave to caller.
+                return "1mo"
+            # Approx trading bars per year for daily, otherwise smaller.
+            bars_per_year = 252 if interval0 == "1d" else 52 if interval0 == "1wk" else 12
+            years = max(1, int((max(1, int(limit0)) / bars_per_year) + 1))
+            if years <= 1:
+                return "1y"
+            if years <= 2:
+                return "2y"
+            if years <= 5:
+                return "5y"
+            if years <= 10:
+                return "10y"
+            return "max"
+
         def _load() -> pd.DataFrame:
-            return ticker.history(
-                start=start,
-                end=end,
-                interval=interval,
-                auto_adjust=False,
-            )
+            if start is None:
+                # Use `period` to avoid yfinance defaulting to a short window.
+                return ticker.history(
+                    period=_choose_period(interval, limit),
+                    interval=interval,
+                    auto_adjust=False,
+                )
+            return ticker.history(start=start, end=end, interval=interval, auto_adjust=False)
 
         df = await asyncio.to_thread(_load)
         if df.empty:

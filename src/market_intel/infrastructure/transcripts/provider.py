@@ -6,7 +6,11 @@ from typing import Any
 import httpx
 
 from market_intel.config.settings import Settings
-from market_intel.domain.ports.transcript_port import EarningsTranscript, TranscriptPort, TranscriptUtterance
+from market_intel.domain.ports.transcript_port import (
+    EarningsTranscript,
+    TranscriptPort,
+    TranscriptUtterance,
+)
 from market_intel.infrastructure.cache.redis_cache import MemoryCache, RedisCache, cache_key
 from market_intel.modules.governance.earnings_transcript import split_into_sentences
 
@@ -51,7 +55,11 @@ class FinnhubTranscriptAdapter(TranscriptPort):
         if r.status_code != 200:
             text = self._synthetic_transcript(symbol, year, quarter)
             return utterances_from_blocks(symbol, year, quarter, text, source="fallback")
-        payload: Any = r.json()
+        try:
+            payload: Any = r.json()
+        except (json.JSONDecodeError, ValueError):
+            text = self._synthetic_transcript(symbol, year, quarter)
+            return utterances_from_blocks(symbol, year, quarter, text, source="fallback")
         raw_text = self._extract_text(payload)
         if not raw_text:
             text = self._synthetic_transcript(symbol, year, quarter)

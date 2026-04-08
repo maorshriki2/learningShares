@@ -74,6 +74,18 @@ def _api_health_ok(base_url: str) -> bool:
         return False
 
 
+def _openapi_has_path(base_url: str, path: str) -> bool:
+    """True if OpenAPI lists `path` (e.g. /api/v1/blindtest/analyze-scenario)."""
+    try:
+        r = httpx.get(f"{base_url.rstrip('/')}/openapi.json", timeout=2.5)
+        if r.status_code != 200:
+            return False
+        paths = r.json().get("paths") or {}
+        return path in paths
+    except Exception:
+        return False
+
+
 def _tcp_port_is_free(host: str, port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
@@ -133,9 +145,11 @@ def main() -> None:
     preferred_api_port = int(settings.api_port)
     app_path = str(src_dir / "market_intel" / "ui" / "app.py")
 
+    # Reuse an existing API only if it is healthy *and* exposes current routes (avoid stale uvicorn).
+    required_route = "/api/v1/blindtest/analyze-scenario"
     api_base = f"http://{api_host}:{preferred_api_port}"
     own_api_server = True
-    if _api_health_ok(api_base):
+    if _api_health_ok(api_base) and _openapi_has_path(api_base, required_route):
         own_api_server = False
     else:
         api_port = _pick_api_port(api_host, preferred_api_port)

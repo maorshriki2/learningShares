@@ -6,7 +6,11 @@ from typing import Any
 
 import httpx
 
-from market_intel.application.dto.governance_dto import FilingDTO, GovernanceDashboardDTO, InsiderRowDTO
+from market_intel.application.dto.governance_dto import (
+    FilingDTO,
+    GovernanceDashboardDTO,
+    InsiderRowDTO,
+)
 from market_intel.config.settings import Settings
 from market_intel.domain.ports.sentiment_port import SentimentPort
 from market_intel.domain.ports.transcript_port import TranscriptPort
@@ -57,11 +61,13 @@ class GovernanceService:
         except Exception:
             transcript = None
         sentences = [u.text for u in (transcript.utterances if transcript else []) if u.text]
+        scored_limit = 40
         try:
-            scored = await self._sentiment.score_sentences(sentences[:40])
+            scored = await self._sentiment.score_sentences(sentences[:scored_limit])
         except Exception:
             scored = []
-        bull, bear = top_bullish_bearish(scored, k=5)
+        highlight_k = 5
+        bull, bear = top_bullish_bearish(scored, k=highlight_k)
         lesson = corporate_speak_lesson(bull + bear)
         return GovernanceDashboardDTO(
             symbol=symbol.upper(),
@@ -86,6 +92,20 @@ class GovernanceService:
             highlights_bullish=bull,
             highlights_bearish=bear,
             corporate_speak_lesson=lesson,
+            explain={
+                "transcript_source": getattr(transcript, "source", None) if transcript else None,
+                "year": int(year),
+                "quarter": int(quarter),
+                "sentences_total": int(len(sentences)),
+                "sentences_scored": int(min(len(sentences), scored_limit)),
+                "sentences_scoring_limit": int(scored_limit),
+                "highlights_k": int(highlight_k),
+                "highlight_selection": "top_bullish_bearish(scored, k=5) from FinBERT sentence scores",
+                "notes": [
+                    "Only first N sentences are scored for latency/cost control.",
+                    "Highlights are educational; sentiment labels are model outputs, not facts.",
+                ],
+            },
         )
 
     async def analyst_narrative(self, symbol: str, year: int, quarter: int) -> dict[str, Any]:
@@ -93,9 +113,17 @@ class GovernanceService:
         Claude summary over earnings call transcript (Finnhub / synthetic) + prior quarter for tone delta.
         """
         sym = symbol.upper()
-        cur = await self._transcripts.fetch_transcript(sym, year, quarter)
+        cur = None
+        prev = None
+        try:
+            cur = await self._transcripts.fetch_transcript(sym, year, quarter)
+        except Exception:
+            cur = None
         py, pq = (year, quarter - 1) if quarter > 1 else (year - 1, 4)
-        prev = await self._transcripts.fetch_transcript(sym, py, pq)
+        try:
+            prev = await self._transcripts.fetch_transcript(sym, py, pq)
+        except Exception:
+            prev = None
 
         def _flatten(tr: object | None, max_chars: int) -> str:
             if tr is None:
@@ -108,11 +136,21 @@ class GovernanceService:
         text_cur = _flatten(cur, 24_000)
         text_prev = _flatten(prev, 12_000)
         source = getattr(cur, "source", None) if cur else None
+        meta = {
+            "symbol": sym,
+            "year": int(year),
+            "quarter": int(quarter),
+            "source": source or "unknown",
+            "anthropic_model": self._settings.anthropic_model,
+            "truncation_chars": {"current": 24_000, "prior": 12_000},
+            "json_extraction": "regex first {...} block from model text, then json.loads",
+        }
 
         if not self._settings.anthropic_api_key:
             return {
                 "ok": False,
                 "source": source or "unknown",
+                "meta": meta,
                 "message_he": "הגדר ANTHROPIC_API_KEY ב־.env כדי לקבל ניתוח נרטיבי אוטומטי (Claude). בינתיים ניתן לקרוא את קטעי הטרנסקריפט בלשונית הראשית.",
                 "strengths_he": [],
                 "risks_hedged_he": [],
@@ -123,6 +161,7 @@ class GovernanceService:
             return {
                 "ok": False,
                 "source": source or "unknown",
+                "meta": meta,
                 "message_he": "לא נמצא טקסט מספיק בטרנסקריפט לרבעון הזה.",
                 "strengths_he": [],
                 "risks_hedged_he": [],
@@ -174,6 +213,7 @@ sentiment_vs_prior_he = שינוי בסנטימנט/בהירות לעומת הר
             return {
                 "ok": True,
                 "source": source or "unknown",
+                "meta": meta,
                 "strengths_he": list(data.get("strengths_he") or [])[:5],
                 "risks_hedged_he": list(data.get("risks_hedged_he") or [])[:5],
                 "sentiment_vs_prior_he": str(data.get("sentiment_vs_prior_he") or ""),
@@ -183,6 +223,7 @@ sentiment_vs_prior_he = שינוי בסנטימנט/בהירות לעומת הר
             return {
                 "ok": False,
                 "source": source or "unknown",
+                "meta": meta,
                 "message_he": f"שגיאה בקריאה ל־Claude: {exc}",
                 "strengths_he": [],
                 "risks_hedged_he": [],
