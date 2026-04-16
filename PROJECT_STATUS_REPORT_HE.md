@@ -1,14 +1,30 @@
 # דוח מצב פרויקט — learningShares
 
-תאריך: 2026-04-06 (עודכן)  
+תאריך: 2026-04-16 (עודכן אוטומטית)  
 פרויקט: learningShares (לשעבר Market-Intel)  
 Stack: FastAPI + Streamlit  
 מקור קוד: GitHub — `maorshriki2/learningShares` (ענף `main`)
 
 ## מצב כללי
 
-המערכת פעילה ומורכבת מ־7 דפי תוכן + דף התחלה למתחילים (`00_Start_Here`).  
+המערכת פעילה ומורכבת מ־13 דפי תוכן + דף התחלה למתחילים (`01_Start_Here`).  
 המטרה: למידה מקצועית של שוק ההון בצורה פשוטה, מדורגת ואינטראקטיבית.
+
+דפי UI קיימים (Streamlit) תחת `src/market_intel/ui/pages/`:
+- `01_Start_Here.py`
+- `02_Watchlist.py`
+- `03_Charting_Lab.py`
+- `04_Fundamentals_Valuation.py`
+- `05_Governance_Sentiment.py`
+- `06_Peer_Comparison.py`
+- `07_Valuation_Verdict.py`
+- `08_Stock_360_View.py`
+- `09_Chart_Technical_Verdict.py`
+- `10_Market_Context_Feed.py`
+- `90_Portfolio_Quiz.py`
+- `91_Macro_Simulation.py`
+- `92_Blind_Test.py`
+- `93_Blind_CSV_Import.py`
 
 ## יכולות עיקריות
 
@@ -84,24 +100,18 @@ Stack: FastAPI + Streamlit
 | דשבורד פונדמנטלים (אינטגרציה) | `src/market_intel/application/services/fundamentals_service.py` |
 | נרטיב אנליסט (Claude) | `src/market_intel/application/services/governance_service.py`, `api/routers/governance.py` |
 | Z-scores ב־peers | `src/market_intel/api/routers/peers.py` |
-| UI: heatmap DCF / טאב נרטיב / scatter peers | `ui/pages/02_Fundamentals_Valuation.py`, `03_Governance_Sentiment.py`, `05_Peer_Comparison.py` |
+| UI: heatmap DCF / טאב נרטיב / scatter peers | `src/market_intel/ui/pages/04_Fundamentals_Valuation.py`, `src/market_intel/ui/pages/05_Governance_Sentiment.py`, `src/market_intel/ui/pages/06_Peer_Comparison.py` |
 | טווחי זמן (כולל שבוע/חודש) | `domain/value_objects/timeframe.py`, `infrastructure/market_data/historical_bars.py` |
-| Watchlist + יקום טיקרים | `src/market_intel/ui/pages/09_Watchlist.py`, `src/market_intel/ui/components/watchlist_universe.py` |
+| Watchlist + יקום טיקרים | `src/market_intel/ui/pages/02_Watchlist.py`, `src/market_intel/ui/components/watchlist_universe.py` |
 | Summary API (מחיר/Market Cap/Vol/Beta) | `src/market_intel/api/routers/instruments.py`, `src/market_intel/application/dto/instrument_dto.py` |
 
 ## תיקונים ושיפורים אחרונים (תמצית)
 
-- תוקן כשל `400` בדף Governance באמצעות fallback בטוח לנתוני חוץ ו-cache parsing.
-- תוקן bug של סימבול ריק שיצר קריאות `/market//ohlcv`.
-- תוקן סנכרון סימבול בין עמודים למניעת "נתונים של מניה קודמת".
-- הוסרו אזהרות `use_container_width` (הוחלף ל־`width="stretch"`).
-- הרחבת הסברים ופרשנות דינמית ב־Charting, Macro, Portfolio, Blind Test, **Fundamentals**, **Peers**; הוספת timeframes `1wk` / `1mo`.
-- **פורנזיקה:** מנוע דגלים אדומים + בלוק «אזהרות אנליסט» בפונדמנטלים.
-- **DCF:** מטריצת רגישות (WACC × צמיחה טרמינלית) + heatmap ב־Streamlit.
-- **Governance:** endpoint ולשונית Analyst Narrative (Claude + טרנסקריפט); הגדרות `anthropic_api_key` / `anthropic_model` ב־`settings`.
-- **Peers:** Z-scores בטבלה, scatter צמיחה–P/E, הרחבת נרטיב «בתכלס».
-- **Watchlist:** עמוד חדש לפי סקטור + Large/Mid/Small, כולל endpoint ייעודי לסיכום מניה (מחיר, שווי שוק, בטא, תנודתיות 1Y) וכפתור "ניתוח" שמריץ טכני+פונדומנטלי+Peers בזמן אמת.
-- **DevOps / Git:** `.gitignore` סטנדרטי (venv, `__pycache__`, `.env`, קבצי OS); הריפו מאותחל ומקושר ל־GitHub; commit ראשון ו־`main` נדחף ל־`origin`.
+- 2026-04-09 — test eap fix
+- 2026-04-09 — test script stderr fix
+- 2026-04-09 — Initial commit: learningShares project and git helper scripts
+- 2026-04-09 — Market Intel: API routes, UI pages, watchlist fallback, analytics modules
+- 2026-04-05 — Initial commit
 
 ## בדיקת API (Smoke)
 
@@ -125,7 +135,7 @@ Stack: FastAPI + Streamlit
    - `python scripts/run_app.py`
 3. Windows (אופציונלי): EXE דרך `learningSharesDesktop.spec`; מתקין דרך `scripts/build_windows_installer.ps1` → `installer_output/`.
 4. להתחיל מ:
-   - `00_Start_Here`
+   - `01_Start_Here`
 
 ## הערה
 
