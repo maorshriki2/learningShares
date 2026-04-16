@@ -161,37 +161,30 @@ def render_sidebar_nav(current: str | None = None) -> None:
 
             st.page_link("app.py", label="Favorite Stocks")
 
-            st.page_link(
-                "pages/01_Start_Here.py",
-                label=f"{_dot(_has_artifact_ok())} Start Here",
-            )
             st.page_link("pages/02_Watchlist.py", label="Watchlist")
 
-            with st.expander("Core lessons", expanded=True):
-                st.page_link("pages/03_Charting_Lab.py", label=f"{_dot(_has_artifact_ok())} Charting Lab")
-                st.page_link(
-                    "pages/04_Fundamentals_Valuation.py",
-                    label=f"{_dot(_has_artifact_ok())} Fundamentals Valuation",
-                )
-                st.page_link(
-                    "pages/05_Governance_Sentiment.py",
-                    label=f"{_dot(_has_artifact_ok())} Governance Sentiment",
-                )
-                st.page_link("pages/06_Peer_Comparison.py", label=f"{_dot(_has_artifact_ok())} Peer Comparison")
-
-            with st.expander("Core verdict", expanded=True):
-                st.page_link("pages/07_Valuation_Verdict.py", label=f"{_dot(_has_artifact_ok())} Valuation Verdict")
-                st.page_link("pages/09_Chart_Technical_Verdict.py", label=f"{_dot(_has_artifact_ok())} Chart Technical Verdict")
-                st.page_link("pages/10_Market_Context_Feed.py", label=f"{_dot(_has_artifact_ok())} Market Context Feed")
-
-            st.page_link("pages/08_Stock_360_View.py", label=f"{_dot(_has_artifact_ok())} Stock 360 View")
+            st.page_link(
+                "pages/03_Fundamental_AGENT.py",
+                label=f"{_dot(_has_artifact_ok())} Fundamental AGENT",
+            )
+            st.page_link(
+                "pages/04_NEWS_AGENT.py",
+                label=f"{_dot(_has_artifact_ok())} NEWS AGENT",
+            )
+            st.page_link(
+                "pages/05_TECHNICAL_AGENT.py",
+                label=f"{_dot(_has_artifact_ok())} TECHNICAL AGENT",
+            )
+            st.page_link(
+                "pages/06_FINAL_VERDICT_LEARNING_AGENT.py",
+                label=f"{_dot(_has_artifact_ok())} FINAL VERDICT LEARNING AGENT",
+            )
 
             st.markdown("<div class='mi-nav-spacer'></div>", unsafe_allow_html=True)
             st.markdown("<div class='mi-nav-green'>More</div>", unsafe_allow_html=True)
             st.page_link("pages/90_Portfolio_Quiz.py", label="Portfolio Quiz")
-            st.page_link("pages/91_Macro_Simulation.py", label="Macro Simulation")
             st.page_link("pages/92_Blind_Test.py", label="Blind Test")
-            st.page_link("pages/93_Blind_CSV_Import.py", label="Blind CSV (אנונימי)")
+            # Intentionally hidden from the product navigation (still available via direct file run if needed).
 
             gs = st.session_state.get("guided_symbol", "")
             if is_placeholder_symbol(gs):

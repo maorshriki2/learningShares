@@ -467,16 +467,113 @@ def render_ohlcv_snapshot_narrative(
 
     render_focus_heading(f"**{symbol}** — בתכלס: מה הגרף אומר עכשיו", variant="insight")
     st.caption("לפי הנר הימני ביותר והאינדיקטורים שמחושבים אצלך בחלון — מספרים קונקרטיים מהנתונים.")
-    render_focus_block("\n\n".join(f"- {line}" for line in lines), variant="insight")
+    try:
+        narrative = _ai_rewrite_hebrew_narrative_required(
+            symbol=symbol,
+            timeframe=timeframe,
+            bullets=lines,
+            kind="snapshot",
+        )
+        render_focus_block(narrative, variant="insight")
+    except RuntimeError as exc:
+        st.error(str(exc))
+        st.stop()
     if regime:
         render_focus_heading("איפה המחיר על ציר התנועה בחלון (לא חיזוי עסקי)", variant="caution")
         st.caption(
             "פרשנות חינוכית: איפה המחיר על **ציר התנועה בחלון** — לא חיזוי עסקי ולא המלצה."
         )
-        render_focus_block("\n\n".join(f"- {line}" for line in regime), variant="caution")
+        try:
+            narrative_regime = _ai_rewrite_hebrew_narrative_required(
+                symbol=symbol,
+                timeframe=timeframe,
+                bullets=regime,
+                kind="regime",
+            )
+            render_focus_block(narrative_regime, variant="caution")
+        except RuntimeError as exc:
+            st.error(str(exc))
+            st.stop()
     st.caption(
         "זו קריאה אוטומטית של המערכת על הנתונים שבגרף — לא תחזית, לא המלצה, ולא ייעוץ השקעות."
     )
+
+
+@st.cache_data(show_spinner=False, ttl=6 * 60 * 60)
+def _ai_rewrite_hebrew_narrative_required(*, symbol: str, timeframe: str, bullets: list[str], kind: str) -> str:
+    """Rewrite the narrative via the project's configured model; no legacy rendering fallback."""
+    try:
+        from market_intel.config.settings import get_settings
+    except Exception as exc:
+        raise RuntimeError(f"AI narrative is unavailable (settings import failed): {exc}") from exc
+
+    settings = get_settings()
+    if not getattr(settings, "anthropic_api_key", None):
+        raise RuntimeError("AI narrative is unavailable: missing `ANTHROPIC_API_KEY` in `.env`.")
+
+    try:
+        import json
+        import re
+
+        import httpx
+    except Exception as exc:
+        raise RuntimeError(f"AI narrative is unavailable (missing dependency): {exc}") from exc
+
+    bullets_text = "\n".join(f"- {b}" for b in (bullets or []) if isinstance(b, str) and b.strip())
+    if not bullets_text.strip():
+        raise RuntimeError("AI narrative is unavailable: empty narrative input.")
+
+    prompt = f"""אתה עורך לשון פיננסי בעברית. קיבלת תמצית עובדתית (בולטים) שמסבירה מה רואים בגרף נרות.
+המטרה: לבנות מחדש טקסט עברי טבעי, פחות תבניתי, קל לקריאה, **בלי** לאבד דיוק.
+
+חוקים:
+1) אל תשנה מספרים, אחוזים, סימנים (+/-), או שמות אינדיקטורים (RSI, MACD, VWAP, איצ׳ימוקו וכו׳). אם מופיעים בתוך Backticks או Bold — השאר אותם בדיוק.
+2) אל תוסיף המלצות השקעה. ניסוח חינוכי בלבד.
+3) אל תוסיף עובדות שלא קיימות בבולטים.
+4) סגנון: 2–4 פסקאות קצרות, בלי רשימות.
+5) תחזיר **רק** JSON תקין (בלי markdown) במבנה:
+{{"narrative_he":"..."}}
+
+Meta: symbol={symbol}, timeframe={timeframe}, section={kind}
+
+הבולטים:
+{bullets_text}
+"""
+
+    try:
+        r = httpx.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": settings.anthropic_api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": settings.anthropic_model,
+                "max_tokens": 900,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            timeout=60.0,
+        )
+        r.raise_for_status()
+        payload = r.json()
+        blocks = payload.get("content") or []
+        raw = ""
+        for b in blocks:
+            if isinstance(b, dict) and b.get("type") == "text":
+                raw += str(b.get("text", ""))
+        m = re.search(r"\{[\s\S]*\}", raw)
+        if not m:
+            raise RuntimeError("AI narrative failed: model did not return JSON.")
+        data = json.loads(m.group(0))
+        out = str(data.get("narrative_he") or "").strip()
+        if not out:
+            raise RuntimeError("AI narrative failed: empty output.")
+        return out
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(f"AI narrative failed: {exc}") from exc
 
 
 def build_portfolio_alpha_lines(

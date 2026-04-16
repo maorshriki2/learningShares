@@ -1,7 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;600&family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@400;600&display=swap');
 
 html, body, [class*="css"]  {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', 'Heebo', sans-serif;
 }
 
 .terminal-root {
@@ -38,4 +38,69 @@ html, body, [class*="css"]  {
 
 div[data-testid="stSidebar"] {
   background: linear-gradient(180deg, #0f172a, #0b1020);
+}
+
+/* ===========================
+   Hebrew / RTL readability
+   =========================== */
+
+/* Keep the overall UI layout LTR (so controls/tabs don't flip).
+   Apply RTL only to text elements (headings/paragraphs/lists) for Hebrew readability. */
+div[data-testid="stMarkdownContainer"],
+div[data-testid="stCaptionContainer"] {
+  font-family: 'Heebo', 'Inter', sans-serif;
+}
+
+div[data-testid="stMarkdownContainer"] h1,
+div[data-testid="stMarkdownContainer"] h2,
+div[data-testid="stMarkdownContainer"] h3,
+div[data-testid="stMarkdownContainer"] h4,
+div[data-testid="stMarkdownContainer"] h5,
+div[data-testid="stMarkdownContainer"] h6,
+div[data-testid="stMarkdownContainer"] p,
+div[data-testid="stMarkdownContainer"] li,
+div[data-testid="stCaptionContainer"] {
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: plaintext;
+}
+
+/* Streamlit tabs bar should stay in the original LTR layout. */
+.stTabs [data-baseweb="tab-list"],
+.stTabs [data-baseweb="tab"],
+.stTabs [data-baseweb="tab-panel"] {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Charts: keep the original LTR rendering (axes, numbers, labels). */
+div[data-testid="stPlotlyChart"],
+div[data-testid="stPlotlyChart"] * {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: isolate;
+}
+
+/* Tables (DataFrame): restore RTL readability for Hebrew headers/labels. */
+div[data-testid="stDataFrame"],
+div[data-testid="stDataFrame"] * {
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: plaintext;
+}
+
+/* Keep technical snippets and code blocks strictly LTR inside RTL pages. */
+code, pre, kbd, samp {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: isolate;
+}
+
+/* Inputs are usually tickers / numbers: keep them LTR to avoid confusion. */
+div[data-testid="stTextInput"] input,
+div[data-testid="stNumberInput"] input,
+div[data-testid="stTextArea"] textarea {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: isolate;
 }

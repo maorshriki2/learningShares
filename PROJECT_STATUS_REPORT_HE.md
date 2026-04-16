@@ -7,12 +7,25 @@ Stack: FastAPI + Streamlit
 
 ## מצב כללי
 
-המערכת פעילה ומורכבת מ־13 דפי תוכן + דף התחלה למתחילים (`01_Start_Here`).  
+המערכת פעילה. ה־UI עודכן כך שמוצגים למשתמש רק דפים רלוונטיים דרך ניווט סיידבר ייעודי, בלי לגעת בחישובים/דאטה.  
 המטרה: למידה מקצועית של שוק ההון בצורה פשוטה, מדורגת ואינטראקטיבית.
 
 דפי UI קיימים (Streamlit) תחת `src/market_intel/ui/pages/`:
-- `01_Start_Here.py`
 - `02_Watchlist.py`
+- `03_Fundamental_AGENT.py` (מעטפת שמרנדרת מסך קיים)
+- `04_NEWS_AGENT.py` (מעטפת שמרנדרת מסך קיים)
+- `05_TECHNICAL_AGENT.py` (מעטפת שמרנדרת מסך קיים)
+- `06_FINAL_VERDICT_LEARNING_AGENT.py` (מעטפת שמרנדרת מסך קיים)
+- `90_Portfolio_Quiz.py`
+- `92_Blind_Test.py`
+
+ניווט סיידבר (UI/UX):
+- מציג רק: `Favorite Stocks`, `Watchlist`, `Fundamental AGENT`, `NEWS AGENT`, `TECHNICAL AGENT`, `FINAL VERDICT LEARNING AGENT`
+- תחת **More**: `Portfolio Quiz`, `Blind Test`
+- הקבצים של מסכי ה־Agent (ה־UI שהועבר מהעמודים הישנים) נמצאים תחת `src/market_intel/ui/screens/agents/`
+
+עמודי UI ישנים שהוסרו מהתצוגה (נמחקו מ־`src/market_intel/ui/pages/` כדי שלא יופיעו כטאבים ב־Streamlit):
+- `01_Start_Here.py`
 - `03_Charting_Lab.py`
 - `04_Fundamentals_Valuation.py`
 - `05_Governance_Sentiment.py`
@@ -21,9 +34,7 @@ Stack: FastAPI + Streamlit
 - `08_Stock_360_View.py`
 - `09_Chart_Technical_Verdict.py`
 - `10_Market_Context_Feed.py`
-- `90_Portfolio_Quiz.py`
 - `91_Macro_Simulation.py`
-- `92_Blind_Test.py`
 - `93_Blind_CSV_Import.py`
 
 ## יכולות עיקריות
@@ -100,13 +111,16 @@ Stack: FastAPI + Streamlit
 | דשבורד פונדמנטלים (אינטגרציה) | `src/market_intel/application/services/fundamentals_service.py` |
 | נרטיב אנליסט (Claude) | `src/market_intel/application/services/governance_service.py`, `api/routers/governance.py` |
 | Z-scores ב־peers | `src/market_intel/api/routers/peers.py` |
-| UI: heatmap DCF / טאב נרטיב / scatter peers | `src/market_intel/ui/pages/04_Fundamentals_Valuation.py`, `src/market_intel/ui/pages/05_Governance_Sentiment.py`, `src/market_intel/ui/pages/06_Peer_Comparison.py` |
+| ניווט סיידבר | `src/market_intel/ui/components/sidebar_nav.py` |
+| מסכי Agent (UI) | `src/market_intel/ui/screens/agents/fundamental.py`, `src/market_intel/ui/screens/agents/news.py`, `src/market_intel/ui/screens/agents/technical.py`, `src/market_intel/ui/screens/agents/final_verdict.py` |
+| מעטפות Agent (דפי Streamlit) | `src/market_intel/ui/pages/03_Fundamental_AGENT.py`, `src/market_intel/ui/pages/04_NEWS_AGENT.py`, `src/market_intel/ui/pages/05_TECHNICAL_AGENT.py`, `src/market_intel/ui/pages/06_FINAL_VERDICT_LEARNING_AGENT.py` |
 | טווחי זמן (כולל שבוע/חודש) | `domain/value_objects/timeframe.py`, `infrastructure/market_data/historical_bars.py` |
 | Watchlist + יקום טיקרים | `src/market_intel/ui/pages/02_Watchlist.py`, `src/market_intel/ui/components/watchlist_universe.py` |
 | Summary API (מחיר/Market Cap/Vol/Beta) | `src/market_intel/api/routers/instruments.py`, `src/market_intel/application/dto/instrument_dto.py` |
 
 ## תיקונים ושיפורים אחרונים (תמצית)
 
+- 2026-04-16 — UI/UX: ניווט סיידבר חדש + מעבר למסכי `screens/agents` + מעטפות Agent נקיות ב־`ui/pages` + הסתרת עמודי UI ישנים ע"י הסרה מ־`ui/pages` (ללא שינוי חישובים/דאטה)
 - 2026-04-09 — test eap fix
 - 2026-04-09 — test script stderr fix
 - 2026-04-09 — Initial commit: learningShares project and git helper scripts
@@ -135,7 +149,7 @@ Stack: FastAPI + Streamlit
    - `python scripts/run_app.py`
 3. Windows (אופציונלי): EXE דרך `learningSharesDesktop.spec`; מתקין דרך `scripts/build_windows_installer.ps1` → `installer_output/`.
 4. להתחיל מ:
-   - `01_Start_Here`
+   - `Watchlist` (או לבחור מסך מתוך הסיידבר)
 
 ## הערה
 
